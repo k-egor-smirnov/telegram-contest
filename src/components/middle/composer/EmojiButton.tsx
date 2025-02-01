@@ -8,6 +8,8 @@ import { IS_EMOJI_SUPPORTED } from '../../../util/windowEnvironment';
 
 import useLastCallback from '../../../hooks/useLastCallback';
 
+import MaskIcon from '../../common/icons/MaskIcon';
+
 import './EmojiButton.scss';
 
 type OwnProps = {
@@ -31,7 +33,7 @@ const EmojiButton: FC<OwnProps> = ({
     focus && 'focus',
   );
 
-  const src = `${IS_PACKAGED_ELECTRON ? BASE_URL : '.'}/img-apple-64/${emoji.image}.png`;
+  const src = emoji.src ?? `${IS_PACKAGED_ELECTRON ? BASE_URL : '.'}/img-apple-64/${emoji.image}.png`;
   const isLoaded = LOADED_EMOJIS.has(src);
 
   return (
@@ -40,16 +42,17 @@ const EmojiButton: FC<OwnProps> = ({
       onMouseDown={handleClick}
       title={`:${emoji.names[0]}:`}
     >
-      {IS_EMOJI_SUPPORTED ? emoji.native : (
-        <img
-          src={src}
-          className={!isLoaded ? 'opacity-transition shown' : undefined}
-          alt={emoji.native}
-          loading="lazy"
-          data-path={src}
-          onLoad={!isLoaded ? handleEmojiLoad : undefined}
-          draggable={false}
-        />
+      {(IS_EMOJI_SUPPORTED && !emoji.src) ? emoji.native : (
+        // <img
+        //   src={src}
+        //   className={!isLoaded ? 'opacity-transition shown' : undefined}
+        //   alt={emoji.native}
+        //   loading="lazy"
+        //   data-path={src}
+        //   onLoad={!isLoaded ? handleEmojiLoad : undefined}
+        //   draggable={false}
+        // />
+        <MaskIcon src={src} alt={emoji.native} />
       )}
     </div>
   );

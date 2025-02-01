@@ -53,6 +53,7 @@ type Emoji = {
   native: string;
   image: string;
   skin?: number;
+  src?: string;
 };
 
 type EmojiWithSkins = Record<number, Emoji>;

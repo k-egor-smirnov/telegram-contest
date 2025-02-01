@@ -1,0 +1,35 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 8px 0 15px;
+  width: 100%;
+  letter-spacing: -0.25px;
+  font-size: 10px;
+  color: #717579;
+  transition: 0.25s ease-in-out color;
+  cursor: pointer;
+}
+
+.tab:focus {
+  outline: 0;
+}
+
+.active {
+  color: #5a99ef;
+}
+
+.badgeActive {
+  color: red;
+}
+
+.icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 2px;
+  background-color: currentColor;
+  transition: 0.10s ease-in-out background-color;
+}

@@ -9,6 +9,7 @@ import type { TabWithProperties } from '../../ui/TabList';
 import { ALL_FOLDER_ID } from '../../../config';
 import { selectCanShareFolder, selectTabState } from '../../../global/selectors';
 import { selectCurrentLimit } from '../../../global/selectors/limits';
+import { getFolderIconSrcByEmoji } from '../../../util/folderIconsMap';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import { renderTextWithEntities } from '../helpers/renderTextWithEntities';
 
@@ -24,6 +25,10 @@ type StateProps = {
   maxFolderInvites: number;
   activeChatFolder: number;
   maxChatLists: number;
+};
+
+export type ChatFoldersTabIcon = TabWithProperties & {
+  icon: string;
 };
 
 export type WithChatFoldersTabsProps = {
@@ -143,6 +148,8 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
           });
         }
 
+        console.log(id, contextActions, folder.title, folder);
+
         return {
           id,
           title: renderTextWithEntities({
@@ -151,10 +158,11 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
             noCustomEmojiPlayback: folder.noTitleAnimations,
           }),
           badgeCount: folderCountersById[id]?.chatsCount,
+          icon: id === ALL_FOLDER_ID ? getFolderIconSrcByEmoji('💬') : getFolderIconSrcByEmoji(folder.emoticon ?? '📁'),
           isBadgeActive: Boolean(folderCountersById[id]?.notificationsCount),
           isBlocked,
           contextActions: contextActions?.length ? contextActions : undefined,
-        } satisfies TabWithProperties;
+        } satisfies ChatFoldersTabIcon;
       });
 
       return { folderTabs, activeChatFolder, handleSwitchTab };

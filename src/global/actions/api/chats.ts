@@ -1053,11 +1053,11 @@ addActionHandler('editChatFolder', (global, actions, payload): ActionReturnType 
   const folder = selectChatFolder(global, id);
 
   if (folder) {
+    console.log(folder);
     void callApi('editChatFolder', {
       id,
       folderUpdate: {
         id,
-        emoticon: folder.emoticon,
         pinnedChatIds: folder.pinnedChatIds,
         ...folderUpdate,
       },

@@ -18,6 +18,7 @@ import animateHorizontalScroll from '../../../util/animateHorizontalScroll';
 import animateScroll from '../../../util/animateScroll';
 import buildClassName from '../../../util/buildClassName';
 import { uncompressEmoji } from '../../../util/emoji/emoji';
+import { getEnabledFolderIcons, getFolderIconSrcByEmoji } from '../../../util/folderIconsMap';
 import { pick } from '../../../util/iteratees';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
@@ -236,6 +237,22 @@ const EmojiPicker: FC<OwnProps & StateProps> = ({
         onScroll={handleContentScroll}
         className={buildClassName('EmojiPicker-main', IS_TOUCH_ENV ? 'no-scrollbar' : 'custom-scroll')}
       >
+        <EmojiCategory
+          index={-1}
+          shouldRender
+          category={{ emojis: getEnabledFolderIcons(), id: 'folder', name: 'folder' }}
+          allEmojis={getEnabledFolderIcons().reduce<AllEmojis>((acc, v) => {
+            acc[v] = {
+              id: v,
+              image: '',
+              names: [v],
+              native: v,
+              src: getFolderIconSrcByEmoji(v),
+            };
+            return acc;
+          }, {})}
+          onEmojiSelect={handleEmojiSelect}
+        />
         {allCategories.map((category, i) => (
           <EmojiCategory
             category={category}

@@ -14,23 +14,32 @@ import { STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
 import { isUserId } from '../../../../global/helpers';
 import { selectCanShareFolder } from '../../../../global/selectors';
 import { selectCurrentLimit } from '../../../../global/selectors/limits';
+import buildClassName from '../../../../util/buildClassName';
+import { getEnabledFolderIcons, getFolderIconSrcByEmoji, pickFolderIconByName } from '../../../../util/folderIconsMap';
 import { findIntersectionWithSet } from '../../../../util/iteratees';
 import { MEMO_EMPTY_ARRAY } from '../../../../util/memo';
 import { CUSTOM_PEER_EXCLUDED_CHAT_TYPES, CUSTOM_PEER_INCLUDED_CHAT_TYPES } from '../../../../util/objects/customPeer';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
 
 import { selectChatFilters } from '../../../../hooks/reducers/useFoldersReducer';
+import useAppLayout from '../../../../hooks/useAppLayout';
 import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useOldLang from '../../../../hooks/useOldLang';
 
 import AnimatedIcon from '../../../common/AnimatedIcon';
 import GroupChatInfo from '../../../common/GroupChatInfo';
 import Icon from '../../../common/icons/Icon';
+import MaskIcon from '../../../common/icons/MaskIcon';
 import PrivateChatInfo from '../../../common/PrivateChatInfo';
+import SymbolMenu from '../../../middle/composer/SymbolMenu';
+import SymbolMenuButton from '../../../middle/composer/SymbolMenuButton';
+import Button from '../../../ui/Button';
 import FloatingActionButton from '../../../ui/FloatingActionButton';
 import InputText from '../../../ui/InputText';
 import ListItem from '../../../ui/ListItem';
+import ResponsiveHoverButton from '../../../ui/ResponsiveHoverButton';
 import Spinner from '../../../ui/Spinner';
+import SettingsFoldersSymbolMenuButton from './SettingsFoldersSymbolMenuButton';
 
 type OwnProps = {
   state: FoldersState;
@@ -95,6 +104,8 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
   const [isIncludedChatsListExpanded, setIsIncludedChatsListExpanded] = useState(false);
   const [isExcludedChatsListExpanded, setIsExcludedChatsListExpanded] = useState(false);
 
+  const [isSymbolPickerOpened, setSymbolPickerOpened] = useState(false);
+
   useEffect(() => {
     if (isRemoved) {
       onReset();
@@ -154,6 +165,10 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
   const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { currentTarget } = event;
     dispatch({ type: 'setTitle', payload: currentTarget.value.trim() });
+  }, [dispatch]);
+
+  const handleEmoticonSet = useCallback((emoticon: string) => {
+    dispatch({ type: 'setEmoticon', payload: emoticon });
   }, [dispatch]);
 
   const handleSubmit = useCallback(() => {
@@ -296,13 +311,53 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
             </p>
           )}
 
-          <InputText
-            className="mb-0"
-            label={lang('FilterNameHint')}
-            value={state.folder.title.text}
-            onChange={handleChange}
-            error={state.error && state.error === ERROR_NO_TITLE ? ERROR_NO_TITLE : undefined}
-          />
+          <div className="title-container">
+            <InputText
+              className="mb-0"
+              label={lang('FilterNameHint')}
+              value={state.folder.title.text}
+              onChange={handleChange}
+              error={state.error && state.error === ERROR_NO_TITLE ? ERROR_NO_TITLE : undefined}
+            />
+
+            <SettingsFoldersSymbolMenuButton
+              closeSymbolMenu={() => {
+                console.trace('close');
+                setSymbolPickerOpened(false);
+              }}
+              isAttachmentModal
+              onEmojiSelect={handleEmoticonSet}
+              openSymbolMenu={() => {
+                console.trace('open');
+                setSymbolPickerOpened(true);
+              }}
+              buttonClassName="smaller"
+              isSymbolMenuOpen={isSymbolPickerOpened}
+            />
+          </div>
+
+          {/* // chatId={chatId}
+            // threadId={threadId}
+            // isMobile={isMobile}
+            // isReady={isReady}
+            // isSymbolMenuOpen={isSymbolMenuOpen}
+            openSymbolMenu={openSymbolMenu}
+            // closeSymbolMenu={closeSymbolMenu}
+            // canSendStickers={canSendStickers}
+            // canSendGifs={canSendGifs}
+            // isMessageComposer={isInMessageList}
+            // onGifSelect={handleGifSelect}
+            // onStickerSelect={handleStickerSelect}
+            // onCustomEmojiSelect={handleCustomEmojiSelect}
+            // onRemoveSymbol={removeSymbol}
+            // onEmojiSelect={insertTextAndUpdateCursor}
+            // closeBotCommandMenu={closeBotCommandMenu}
+            // closeSendAsMenu={closeSendAsMenu}
+            // isSymbolMenuForced={isSymbolMenuForced}
+            // canSendPlainText={!isComposerBlocked}
+            // inputCssSelector={editableInputCssSelector}
+            // idPrefix={type}
+            // forceDarkTheme={isInStoryViewer} */}
         </div>
 
         {!isOnlyInvites && (

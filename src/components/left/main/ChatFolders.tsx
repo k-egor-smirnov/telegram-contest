@@ -1,13 +1,13 @@
 import type { FC } from '../../../lib/teact/teact';
 import React, {
-  memo, useEffect, useRef,
+  memo, useEffect, useMemo, useRef,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiSession } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
-import type { LeftColumnContent, SettingsScreens } from '../../../types';
+import type { ISettings, LeftColumnContent, SettingsScreens } from '../../../types';
 
 import { ALL_FOLDER_ID } from '../../../config';
 import { selectTabState } from '../../../global/selectors';
@@ -24,7 +24,7 @@ import useShowTransition from '../../../hooks/useShowTransition';
 
 import StoryRibbon from '../../story/StoryRibbon';
 import Transition from '../../ui/Transition';
-import ChatFoldersTabs from './ChatFoldersHorizontalTabs';
+import ChatFoldersHorizontalTabs from './ChatFoldersHorizontalTabs';
 import ChatList from './ChatList';
 
 type OwnProps = {
@@ -48,6 +48,7 @@ type StateProps = {
   archiveSettings: GlobalState['archiveSettings'];
   isStoryRibbonShown?: boolean;
   sessions?: Record<string, ApiSession>;
+  foldersTabsAppearance: ISettings['foldersTabsAppearance'];
 };
 
 const SAVED_MESSAGES_HOTKEY = '0';
@@ -67,6 +68,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   archiveSettings,
   isStoryRibbonShown,
   sessions,
+  foldersTabsAppearance,
 }) => {
   const {
     setActiveChatFolder,
@@ -187,7 +189,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
     );
   }
 
-  const shouldRenderFolders = orderedFolderIds && orderedFolderIds.length > 1;
+  const shouldRenderFolders = foldersTabsAppearance === 'horizontal' && orderedFolderIds && orderedFolderIds.length > 1;
 
   return (
     <div
@@ -200,7 +202,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
     >
       {shouldRenderStoryRibbon && <StoryRibbon isClosing={isStoryRibbonClosing} />}
       {
-        shouldRenderFolders ? <ChatFoldersTabs contextRootElementSelector="#LeftColumn" />
+        shouldRenderFolders ? <ChatFoldersHorizontalTabs contextRootElementSelector="#LeftColumn" />
           : shouldRenderPlaceholder
             ? <div ref={placeholderRef} className="tabs-placeholder" />
             : undefined
@@ -255,6 +257,7 @@ export default memo(withGlobal<OwnProps>(
       archiveSettings,
       isStoryRibbonShown,
       sessions,
+      foldersTabsAppearance: global.settings.byKey.foldersTabsAppearance,
     };
   },
 )(ChatFolders));

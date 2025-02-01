@@ -1,4 +1,4 @@
-import type { FC } from '../../../lib/teact/teact';
+import type { FC, TeactNode } from '../../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useRef,
 } from '../../../lib/teact/teact';
@@ -40,11 +40,10 @@ import Icon from '../../common/icons/Icon';
 import PeerChip from '../../common/PeerChip';
 import StoryToggler from '../../story/StoryToggler';
 import Button from '../../ui/Button';
-import DropdownMenu from '../../ui/DropdownMenu';
 import SearchInput from '../../ui/SearchInput';
 import ShowTransition from '../../ui/ShowTransition';
 import ConnectionStatusOverlay from '../ConnectionStatusOverlay';
-import LeftSideMenuItems from './LeftSideMenuItems';
+import MainMenuDropdown from '../MainMenuDropdown';
 import StatusButton from './StatusButton';
 
 import './LeftMainHeader.scss';
@@ -56,10 +55,8 @@ type OwnProps = {
   isClosingSearch?: boolean;
   shouldSkipTransition?: boolean;
   onSearchQuery: (query: string) => void;
-  onSelectSettings: NoneToVoidFunction;
-  onSelectContacts: NoneToVoidFunction;
-  onSelectArchived: NoneToVoidFunction;
   onReset: NoneToVoidFunction;
+  mainMenuButton: TeactNode;
 };
 
 type StateProps =
@@ -75,6 +72,7 @@ type StateProps =
     areChatsLoaded?: boolean;
     hasPasscode?: boolean;
     canSetPasscode?: boolean;
+    foldersTabsAppearance: ISettings['foldersTabsAppearance'];
   }
   & Pick<GlobalState, 'connectionState' | 'isSyncing' | 'isFetchingDifference'>;
 
@@ -102,10 +100,9 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   hasPasscode,
   canSetPasscode,
   onSearchQuery,
-  onSelectSettings,
-  onSelectContacts,
-  onSelectArchived,
   onReset,
+  foldersTabsAppearance,
+  mainMenuButton,
 }) => {
   const {
     setGlobalSearchDate,
@@ -119,10 +116,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   const lang = useLang();
   const { isMobile, isDesktop } = useAppLayout();
 
-  const [isBotMenuOpen, markBotMenuOpen, unmarkBotMenuOpen] = useFlag();
-
   const areContactsVisible = content === LeftColumnContent.Contacts;
-  const hasMenu = content === LeftColumnContent.ChatList;
 
   const selectedSearchDate = useMemo(() => {
     return searchDate
@@ -156,28 +150,6 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
     ...(IS_APP && { 'Mod+L': handleLockScreenHotkey }),
   } : undefined), [canSetPasscode]));
 
-  const MainButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {
-    return ({ onTrigger, isOpen }) => (
-      <Button
-        round
-        ripple={hasMenu && !isMobile}
-        size="smaller"
-        color="translucent"
-        className={isOpen ? 'active' : ''}
-        // eslint-disable-next-line react/jsx-no-bind
-        onClick={hasMenu ? onTrigger : () => onReset()}
-        ariaLabel={hasMenu ? oldLang('AccDescrOpenMenu2') : 'Return to chat list'}
-      >
-        <div className={buildClassName(
-          'animated-menu-icon',
-          !hasMenu && 'state-back',
-          shouldSkipTransition && 'no-animation',
-        )}
-        />
-      </Button>
-    );
-  }, [hasMenu, isMobile, oldLang, onReset, shouldSkipTransition]);
-
   const handleSearchFocus = useLastCallback(() => {
     if (!searchQuery) {
       onSearchQuery('');
@@ -203,16 +175,6 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   const searchInputPlaceholder = content === LeftColumnContent.Contacts
     ? lang('SearchFriends')
     : lang('Search');
-
-  const versionString = IS_BETA ? `${APP_VERSION} Beta (${APP_REVISION})` : (DEBUG ? APP_REVISION : APP_VERSION);
-
-  const isFullscreen = useFullscreenStatus();
-
-  // Disable dropdown menu RTL animation for resize
-  const {
-    shouldDisableDropdownMenuTransitionRef,
-    handleDropdownMenuTransitionEnd,
-  } = useLeftHeaderButtonRtlForumTransition(shouldHideSearch);
 
   // eslint-disable-next-line no-null/no-null
   const headerRef = useRef<HTMLDivElement>(null);
@@ -252,29 +214,9 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   return (
     <div className="LeftMainHeader">
       <div id="LeftMainHeader" className="left-header" ref={headerRef}>
+        {/* todo check rtl */}
         {oldLang.isRtl && <div className="DropdownMenuFiller" />}
-        <DropdownMenu
-          trigger={MainButton}
-          footer={`${APP_NAME} ${versionString}`}
-          className={buildClassName(
-            'main-menu',
-            oldLang.isRtl && 'rtl',
-            shouldHideSearch && oldLang.isRtl && 'right-aligned',
-            shouldDisableDropdownMenuTransitionRef.current && oldLang.isRtl && 'disable-transition',
-          )}
-          forceOpen={isBotMenuOpen}
-          positionX={shouldHideSearch && oldLang.isRtl ? 'right' : 'left'}
-          transformOriginX={IS_ELECTRON && IS_MAC_OS && !isFullscreen ? 90 : undefined}
-          onTransitionEnd={oldLang.isRtl ? handleDropdownMenuTransitionEnd : undefined}
-        >
-          <LeftSideMenuItems
-            onSelectArchived={onSelectArchived}
-            onSelectContacts={onSelectContacts}
-            onSelectSettings={onSelectSettings}
-            onBotMenuOpened={markBotMenuOpen}
-            onBotMenuClosed={unmarkBotMenuOpen}
-          />
-        </DropdownMenu>
+        {foldersTabsAppearance === 'horizontal' && mainMenuButton}
         <SearchInput
           inputId="telegram-search-input"
           resultsItemSelector=".LeftSearch .ListItem-button"
@@ -356,6 +298,7 @@ export default memo(withGlobal<OwnProps>(
       areChatsLoaded: Boolean(global.chats.listIds.active),
       hasPasscode: Boolean(global.passcode.hasPasscode),
       canSetPasscode: selectCanSetPasscode(global),
+      foldersTabsAppearance: global.settings.byKey.foldersTabsAppearance,
     };
   },
 )(LeftMainHeader));
