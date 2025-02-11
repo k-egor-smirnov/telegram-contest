@@ -367,8 +367,6 @@ function Transition({
       ? render(key === activeKey, key === prevActiveKey, key, activeKey)
       : render;
 
-    console.log(render, key, activeKey);
-
     return (shouldWrap && key !== wrapExceptionKey) || asFastList
       ? <div key={key} teactOrderKey={key}>{rendered}</div>
       : rendered;

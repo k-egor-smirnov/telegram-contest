@@ -215,6 +215,8 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       if (!update.message.isOutgoing && update.message.chatId !== SERVICE_NOTIFICATIONS_USER_ID) return undefined;
       if (actionStarGift?.type !== 'starGiftUnique') return undefined;
 
+      console.log(3, update);
+
       Object.values(global.byTabId).forEach(({ id: tabId }) => {
         const tabState = selectTabState(global, tabId);
         if (tabState.isWaitingForStarGiftUpgrade) {

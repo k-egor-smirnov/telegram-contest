@@ -148,8 +148,6 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
           });
         }
 
-        console.log(id, contextActions, folder.title, folder);
-
         return {
           id,
           title: renderTextWithEntities({
