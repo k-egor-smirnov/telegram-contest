@@ -1,4 +1,4 @@
-import type { FC, Props } from '../../../lib/teact/teact';
+import type { FC, Props, TeactNode } from '../../../lib/teact/teact';
 import React, { memo, useEffect, useMemo } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
@@ -19,6 +19,8 @@ import { useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManag
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
+import CustomEmoji from '../CustomEmoji';
+
 type StateProps = {
   chatFoldersById: Record<number, ApiChatFolder>;
   folderInvitesById: Record<number, ApiChatlistExportedInvite[]>;
@@ -31,7 +33,7 @@ type StateProps = {
 };
 
 export type ChatFoldersTabIcon = TabWithProperties & {
-  icon: string;
+  icon: string | TeactNode;
 };
 
 export type WithChatFoldersTabsProps = {
@@ -158,15 +160,44 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
           });
         }
 
+        const titleCopy:
+        typeof title = { text: title.text, entities: title.entities ? [...title.entities] : undefined };
+
+        const firstEntity = titleCopy.entities?.[0];
+
+        let icon;
+        if (firstEntity?.type === 'MessageEntityCustomEmoji') {
+          icon = (
+            <CustomEmoji
+              // key={cacheBuster ? `${cacheBuster}-${entity.offset}` : undefined}
+              documentId={firstEntity.documentId}
+              size={32}
+              isChatIcon
+              isSelectable
+              withSharedAnimation
+              forceAlways
+              noPlay={folder.noTitleAnimations}
+            />
+          );
+
+          // todo remove after telegram adds emoji title api
+          titleCopy.entities?.shift();
+          titleCopy.text = titleCopy.text.substring(0, firstEntity.offset) + titleCopy.text.substring(firstEntity.offset + firstEntity.length);
+        } else {
+          icon = id === ALL_FOLDER_ID
+            ? getFolderIconSrcByEmoji('💬')
+            : getFolderIconSrcByEmoji(folder.emoticon ?? '📁');
+        }
+
         return {
           id,
           title: renderTextWithEntities({
-            text: title.text,
-            entities: title.entities,
+            text: titleCopy.text,
+            entities: titleCopy.entities,
             noCustomEmojiPlayback: folder.noTitleAnimations,
           }),
           badgeCount: folderCountersById[id]?.chatsCount,
-          icon: id === ALL_FOLDER_ID ? getFolderIconSrcByEmoji('💬') : getFolderIconSrcByEmoji(folder.emoticon ?? '📁'),
+          icon,
           isBadgeActive: Boolean(folderCountersById[id]?.notificationsCount),
           isBlocked,
           contextActions: contextActions?.length ? contextActions : undefined,

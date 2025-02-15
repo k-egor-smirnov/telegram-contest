@@ -33,6 +33,7 @@ export function VerticalNavigationTabs({
           icon={item.icon}
           badgeCount={item.badgeCount}
           isActive={activeTab === index}
+          isBadgeActive={item.isBadgeActive}
           contextActions={item.contextActions}
           clickArg={index}
           onClick={onSwitchTab}

@@ -1,7 +1,7 @@
 @use "sass:color";
 
 @function toRGB($color) {
-  @return color.red($color) + ", " + color.green($color) + ", " + color.blue($color);
+  @return color.red($color)+", "+color.green($color)+", "+color.blue($color);
 }
 
 @function blend-normal($foreground, $background) {

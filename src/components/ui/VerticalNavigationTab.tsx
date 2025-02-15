@@ -65,6 +65,7 @@ export function VerticalNavigationTab({
   const getMenuElement = useLastCallback(
     () => document.querySelector('#portals')!.querySelector('.Tab-context-menu .bubble'),
   );
+
   const getLayout = useLastCallback(() => ({ withPortal: true }));
 
   return (
@@ -75,11 +76,13 @@ export function VerticalNavigationTab({
       onContextMenu={handleContextMenu}
       ref={tabRef}
     >
-      <MaskIcon src={icon} className={styles.icon} />
+      <div className={styles.icon}>
+        {typeof icon === 'string' ? <MaskIcon src={icon} className={styles.maskIcon} /> : icon}
+      </div>
       {typeof title === 'string' ? renderText(title) : title}
-      {/* {Boolean(badgeCount) && (
-        <span className={buildClassName('badge', isBadgeActive && styles.badgeActive)}>{badgeCount}</span>
-      )} */}
+      {Boolean(badgeCount) && (
+        <span className={buildClassName(styles.badge, isBadgeActive && styles.badgeActive)}>{badgeCount}</span>
+      )}
       {isBlocked && <Icon name="lock-badge" className="blocked" />}
       <i className="platform" />
 
