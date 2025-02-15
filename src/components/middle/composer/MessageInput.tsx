@@ -1,9 +1,6 @@
 import type { ChangeEvent, RefObject } from 'react';
 import type { FC } from '../../../lib/teact/teact';
-import React, {
-  memo, useEffect,
-  useRef,
-} from '../../../lib/teact/teact';
+import React, { memo, useEffect, useRef } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiInputMessageReplyInfo } from '../../../api/types';
@@ -13,7 +10,11 @@ import type { Signal } from '../../../util/signals';
 
 import { EDITABLE_INPUT_ID } from '../../../config';
 import { MarkdownParser } from '../../../lib/MarkdownParser';
-import { selectCanPlayAnimatedEmojis, selectDraft, selectIsInSelectMode } from '../../../global/selectors';
+import {
+  selectCanPlayAnimatedEmojis,
+  selectDraft,
+  selectIsInSelectMode,
+} from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { generateRandomInt } from '../../../api/gramjs/gramjsBuilders';
 import renderText from '../../common/helpers/renderText';
@@ -36,6 +37,11 @@ function getNextNode(node) {
   }
 }
 
+const markersByType = {
+  bold: '**',
+  italic: '__',
+};
+
 function getPreviousNode(node) {
   if (node.previousSibling) return node.previousSibling;
   while (node) {
@@ -49,13 +55,11 @@ function getNodesBetween(start: HTMLElement, end: HTMLElement) {
   let node = start;
 
   while (node && node !== end) {
-    if (node?.dataset?.id) {
-      nodes.add(node);
-    }
+    nodes.add(node);
     node = getNextNode(node);
   }
 
-  return [...nodes].map((v) => (v?.nodeType === 3 ? v.parentNode : v)).filter(Boolean);
+  return [...nodes];
 }
 
 function getNodesInRange(range: Range) {
@@ -106,7 +110,9 @@ function getNodesInRange(range: Range) {
     }
   }
 
-  return [...nodes].map((v) => (v?.nodeType === 3 ? v.parentNode : v)).filter(Boolean);
+  return [...nodes]
+    .map((v) => (v?.nodeType === 3 ? v.parentNode : v))
+    .filter(Boolean);
 }
 
 function getNodesAroundRange(range: Range) {
@@ -114,12 +120,12 @@ function getNodesAroundRange(range: Range) {
   const end = range.endContainer;
 
   let startNode = getPreviousNode(start);
-  while (startNode && !startNode?.dataset?.id) {
+  while (startNode && !startNode?.dataset?.type) {
     startNode = getPreviousNode(startNode);
   }
 
   let endNode = getNextNode(end);
-  while (endNode && !endNode?.dataset?.id) {
+  while (endNode && !endNode?.dataset?.type) {
     endNode = getNextNode(endNode);
   }
 
@@ -235,7 +241,38 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 
   // eslint-disable-next-line no-null/no-null
   let inputRef = useRef<HTMLDivElement>(null);
+  const commits = useRef<
+  Array<{
+    type: 'addNode' | 'modifyNode' | 'deleteNode';
+    nodeType: 'text';
+    value: string;
+    pos: number;
+    dir: -1 | 1;
+    selection: Range;
+  }>
+  >([
+    {
+      type: 'addNode',
+      nodeType: 'text',
+      value: 'hello ',
+      pos: 0,
+      // for rtl reasons
+      dir: 1,
+      selection: new Range(),
+    },
+    {
+      type: 'addNode',
+      nodeType: 'text',
+      value: ' world ',
+      pos: 4,
+      // for rtl reasons
+      dir: 1,
+      selection: new Range(),
+    },
+  ]);
+  const commitsOffset = useRef(0);
   const prevSelectionNodes = useRef<[HTMLElement?, HTMLElement?]>([]);
+  const prevCaretPos = useRef<[string, number] | null>(null);
 
   if (ref) {
     inputRef = ref;
@@ -501,49 +538,231 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   //   }
   // }
 
+  function undo() {
+    const commit = commits.current[commits.current.length - 1 + commitsOffset.current];
+    console.log('commit', commit, inputRef.current);
+    if (!commit) {
+      console.log('no undo');
+      return;
+    }
+
+    switch (commit.type) {
+      case 'addNode':
+        console.log('remove', inputRef.current.childNodes[commit.pos]);
+        inputRef.current.childNodes[commit.pos].remove();
+    }
+
+    commitsOffset.current--;
+  }
+
+  function redo() {
+    const commit = commits.current[commits.current.length - 1 + commitsOffset.current + 1];
+
+    console.log('redo', commit);
+    switch (commit.type) {
+      case 'addNode': {
+        const element = document.createElement('span');
+        element.dataset.type = commit.nodeType;
+        element.innerText = commit.value;
+
+        // don't parse markdown here cause it's a new commit
+
+        const posNode = inputRef.current!.childNodes[commit.pos];
+
+        if (commit.dir === 1) {
+          inputRef.current!.insertBefore(element, posNode);
+        } else if (posNode) {
+          console.log(posNode);
+          posNode.parentElement!.insertBefore(element, posNode.nextSibling);
+        } else {
+          inputRef.current!.after(element);
+        }
+
+        break;
+      }
+    }
+
+    commitsOffset.current++;
+  }
+
   useEffect(() => {
-    inputRef.current.innerHTML = new MarkdownParser().parse('hello **bold** or __italic__ world').html;
+    inputRef.current.innerHTML = `<div>${new MarkdownParser().parse(
+      'hello **bold** or __italic__ world __is__ good',
+    ).html}</div>`;
+
+    // setTimeout(() => {
+    //   undo();
+    // }, 500);
+    // setTimeout(() => {
+    //   undo();
+    // }, 1000);
+    // setTimeout(() => {
+    //   redo();
+    // }, 1500);
+    // setTimeout(() => {
+    //   redo();
+    // }, 2000);
   }, []);
 
-  function handleChange(e: ChangeEvent<HTMLDivElement>) {
-    // console.log(document.getSelection()?.focusNode, document.getSelection()?.anchorNode);
+  function handleChange() {
+    // todo сканить сразу всю строку, потом оптимизировать
 
-    // inputRef.current.innerHTML = new MarkdownParser().toHTML(new MarkdownParser().parse(inputRef.current?.innerHTML ?? ''));
-    // console.log(e,
-    //   inputRef.current,
-    //   new MarkdownParser().toHTML(new MarkdownParser().parse(inputRef.current?.innerHTML ?? '')));
+    const removeNodes = new Set();
 
-    // const closestTypedNode = getTypedNodeFromSelection();
-    // const messageNode = textModel.current?.getNodeById(closestTypedNode?.dataset.id);
+    const tasks = [];
 
-    // if (messageNode) {
-    //   messageNode.text = closestTypedNode?.textContent ?? '';
-    // }
+    function checkStack(targetNode, textStack) {
+      if (!textStack[0]) {
+        return;
+      }
 
-    // console.log(textModel.current?.children);
+      console.trace('test', textStack[0]);
 
-    // при удалении маркера раскрывать сообщение на составные части, чтобы маркер стал частью обычного текста
+      const result = new MarkdownParser().parse(textStack[0]);
+      const fakeNode = document.createElement('div');
+      fakeNode.innerHTML = result.html;
+      console.log('html', result.html);
 
-    // функция валидации и сравнения модели с HTML
+      [...fakeNode.children].forEach((fakeNodeChildren) => {
+        targetNode.parentElement.insertBefore(fakeNodeChildren, targetNode);
+      });
 
-    // [...inputRef.current?.childNodes].forEach((child: Node) => {
-    //   if (child.nodeType === 3) {
-    //     const nodeId = generateRandomInt().toString();
-    //     const node: TextMessageNode = {
-    //       id: nodeId,
-    //       text: child.textContent ?? '',
-    //       type: 'text',
-    //       children: [],
-    //     };
+      [...textStack[1]].forEach((n) => {
+        tasks.push(() => n.remove());
+      });
 
-    //     textModel.current.push(node);
+      textStack[0] = '';
+      textStack[1] = [];
+    }
 
-    //     const spanNode = document.createElement('span');
-    //     spanNode.dataset.id = nodeId;
-    //     child.parentNode?.insertBefore(spanNode, child);
-    //     spanNode.appendChild(child);
-    //   }
-    // });
+    for (const div of inputRef.current?.childNodes) {
+      const textStack = ['', []];
+
+      for (const mdNode of div.childNodes) {
+        if (mdNode?.nodeType === 3) {
+          textStack[0] += mdNode.textContent;
+          textStack[1].push(mdNode);
+          continue;
+        } else if (mdNode?.dataset.type === 'text') {
+          textStack[0] += mdNode.innerText;
+          textStack[1].push(mdNode);
+        } else {
+          checkStack(mdNode, textStack);
+        }
+
+        // if (mdNode.dataset?.type === 'text' && [...mdNode.parentElement?.querySelectorAll('[data-type]')].length === 1) {
+        //   mdNode = mdNode.parentElement;
+        // }
+
+        // if (mdNode?.dataset?.type === 'text') {
+        //   const result = new MarkdownParser().parse(mdNode.textContent);
+        //   const fakeNode = document.createElement('div');
+        //   fakeNode.innerHTML = result.html;
+
+        //   if (fakeNode.children.length > 1) {
+        //     [...fakeNode.children].forEach((fakeNodeChildren) => {
+        //       mdNode.parentElement.insertBefore(fakeNodeChildren, mdNode);
+        //     });
+        //     mdNode.remove();
+        //   } else if (fakeNode.children[0]?.dataset.type !== 'text') {
+        //     console.log('not text');
+        //   }
+        // }
+
+        if (
+          !(mdNode instanceof HTMLElement)
+          || mdNode.dataset?.type === 'text'
+        ) {
+          continue;
+        }
+
+        const markerTemplate = markersByType[mdNode.dataset.type!];
+
+        const markerBefore = mdNode.querySelector('.marker:first-child');
+        const markerAfter = mdNode.querySelector('.marker:last-child');
+
+        if (!markerBefore && !markerAfter) {
+          // not selected
+          continue;
+        }
+
+        const isBeforeInvalid = markerBefore?.textContent !== markerTemplate
+          || !markerBefore
+          || markerBefore === markerAfter;
+        let isAfterInvalid = markerAfter?.textContent !== markerTemplate
+          || !markerAfter
+          || markerAfter === markerBefore;
+
+        if (isAfterInvalid && markerAfter?.textContent?.startsWith(markerTemplate)) {
+          const [_, otherContent] = markerAfter?.textContent.split(markerTemplate);
+          // TODO only allowed symbols from docs
+          if (otherContent === ' '.repeat(otherContent.length) || otherContent === ' '.repeat(otherContent.length)) {
+            const newNode = document.createElement('span');
+            newNode.dataset.type = 'text';
+            newNode.innerText = otherContent;
+            markerAfter.parentElement.parentElement.insertBefore(newNode, markerAfter.parentElement.nextSibling);
+            isAfterInvalid = false;
+            markerAfter.innerText = markerTemplate;
+
+            const range = document.createRange();
+            range.setStart(newNode, otherContent.length);
+            range.setEnd(newNode, otherContent.length);
+
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+
+        if (isBeforeInvalid || isAfterInvalid) {
+          const backup = {
+            before: null,
+            content: null,
+            after: null,
+          };
+
+          // Если внутри ноды других типов, поднимаем их на уровень выше
+
+          for (const child of mdNode.childNodes) {
+            if (child === markerBefore) {
+              const newNode = document.createTextNode(markerBefore.textContent);
+              newNode.backup = backup;
+              backup.before = child;
+              mdNode.parentElement?.insertBefore(newNode, mdNode);
+              continue;
+            }
+
+            if (child.dataset?.type === 'text') {
+              const newNode = document.createTextNode(child.textContent);
+              newNode.backup = backup;
+              backup.content = child;
+              mdNode.parentElement?.insertBefore(newNode, mdNode);
+              continue;
+            } else if (child.dataset?.type) {
+              mdNode.parentElement?.insertBefore(child, mdNode);
+              backup.content = child;
+              continue;
+            }
+
+            if (child === markerAfter) {
+              const newNode = document.createTextNode(markerAfter.textContent);
+              newNode.backup = backup;
+              backup.after = child;
+              mdNode.parentElement?.insertBefore(newNode, mdNode);
+              continue;
+            }
+          }
+
+          mdNode.remove();
+
+          // мб сохранять бэкап чилдренов в объект, а потом восстанавливать?
+        }
+      }
+
+      checkStack(div.childNodes[div.childNodes.length - 1], textStack);
+    }
+
+    tasks.forEach((cb) => cb());
   }
 
   useEffect(() => {
@@ -573,86 +792,55 @@ const MessageInput: FC<OwnProps & StateProps> = ({
       const allMarkers = inputRef.current?.querySelectorAll('.marker');
       const keepMarkers = new Set<HTMLElement>();
 
-      getNodesInRange(selection?.getRangeAt(0)).filter((v) => v.dataset?.id).forEach((el: HTMLElement) => {
-        const nodeModel = textModel.current?.getNodeById(el.dataset.id);
+      getNodesInRange(selection?.getRangeAt(0))
+        .filter((v) => v.dataset?.type)
+        .forEach((el: HTMLElement) => {
+          const { type } = el.dataset;
 
-        if (nodeModel?.type === 'text') {
-          return;
-        }
-
-        const marker = nodeModel?.marker;
-
-        if (marker) {
-          if (el.firstChild?.classList.contains('marker')) {
-            keepMarkers.add(el.firstChild as HTMLElement);
-          } else {
-            const leftMarkerNode = document.createElement('span');
-            leftMarkerNode.className = 'marker';
-            leftMarkerNode.innerHTML = nodeModel?.marker;
-            el?.insertBefore(leftMarkerNode, el.firstChild);
+          if (!type || type === 'text') {
+            return;
           }
 
-          if (el.lastChild?.classList.contains('marker')) {
-            keepMarkers.add(el.lastChild as HTMLElement);
-          } else {
-            const rightMarkerNode = document.createElement('span');
-            rightMarkerNode.className = 'marker';
-            rightMarkerNode.innerHTML = nodeModel?.marker;
-            el?.appendChild(rightMarkerNode);
-          }
-        } else {
-          console.warn('not found marker', nodeModel, el);
-        }
-      });
+          const marker = markersByType[type] ?? '??';
 
-      allMarkers?.forEach((marker) => {
-        if (!keepMarkers.has(marker)) {
-          marker.remove();
+          if (marker) {
+            if (el.firstChild?.classList.contains('marker')) {
+              keepMarkers.add(el.firstChild as HTMLElement);
+            } else {
+              const leftMarkerNode = document.createElement('span');
+              leftMarkerNode.className = 'marker';
+              leftMarkerNode.innerHTML = marker;
+              console.log('insert marker');
+              el?.insertBefore(leftMarkerNode, el.firstChild);
+            }
+
+            if (el.lastChild?.classList.contains('marker')) {
+              keepMarkers.add(el.lastChild as HTMLElement);
+            } else {
+              const rightMarkerNode = document.createElement('span');
+              rightMarkerNode.className = 'marker';
+              rightMarkerNode.innerHTML = marker;
+              el?.appendChild(rightMarkerNode);
+            }
+          } else {
+            console.warn('not found marker', nodeModel, el);
+          }
+        });
+
+      allMarkers?.forEach((markerEl) => {
+        if (!keepMarkers.has(markerEl)) {
+          markerEl.remove();
         }
       });
     }
 
     function handleSelectionChange() {
-      const scanStart = prevSelectionNodes.current[0];
-      const scanEnd = prevSelectionNodes.current[1];
+      prevSelectionNodes.current = getNodesAroundRange(
+        document.getSelection()?.getRangeAt(0),
+      );
 
-      let scanNode = scanStart;
-      let scanNodeModel = textModel.current?.getNodeById!(scanNode?.dataset?.id);
-
-      // TODO: if marker is changed, ungroup node to text nodes
-
-      // add new nodes first between start and end
-
-      console.log(getNodesBetween(scanStart, scanEnd));
-
-      while (scanNodeModel && scanNodeModel?.id !== scanEnd?.dataset?.id) {
-        const nextSibling = scanNodeModel?.nextSibling;
-
-        if (scanNodeModel && !inputRef.current?.querySelector(`[data-id="${scanNodeModel?.id}"]`)) {
-          // maybe forward delete
-          scanNodeModel.remove();
-        }
-
-        scanNodeModel = nextSibling;
-        scanNode = inputRef.current?.querySelector(`[data-id="${scanNodeModel?.id}"]`);
-
-        if (scanNodeModel && !scanNode) {
-          scanNodeModel.remove();
-        }
-
-        // TODO add nodes after undo
-      }
-
-      console.log(textModel.current);
-
-      // const nextNodeModel = scanNodeModel?.nextSibling;
-
-      // console.log(scanNode, scanNodeModel, nextNodeModel);
-      // if (!inputRef.current?.querySelector(`[data-id="${nextNodeModel?.id}"]`)) {
-      //   console.log('not found next', nextNodeModel?.type);
-      // }
-
-      prevSelectionNodes.current = getNodesAroundRange(document.getSelection()?.getRangeAt(0));
+      // const closestMdNode = getTypedNodeFromSelection();
+      // prevCaretPos.
 
       if (mouseLockedRef.current) {
         return;
@@ -681,7 +869,10 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     };
   }, []);
 
-  const isTouched = useDerivedState(() => Boolean(isActive && getHtml()), [isActive, getHtml]);
+  const isTouched = useDerivedState(
+    () => Boolean(isActive && getHtml()),
+    [isActive, getHtml],
+  );
 
   const className = buildClassName(
     'form-control allow-selection',
@@ -689,12 +880,19 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     shouldSuppressFocus && 'focus-disabled',
   );
 
-  const inputScrollerContentClass = buildClassName('input-scroller-content', isNeedPremium && 'is-need-premium');
+  const inputScrollerContentClass = buildClassName(
+    'input-scroller-content',
+    isNeedPremium && 'is-need-premium',
+  );
 
   return (
     <div id={id} onClick={shouldSuppressFocus ? onSuppressedFocus : undefined}>
       <div
-        className={buildClassName('custom-scroll', SCROLLER_CLASS, isNeedPremium && 'is-need-premium')}
+        className={buildClassName(
+          'custom-scroll',
+          SCROLLER_CLASS,
+          isNeedPremium && 'is-need-premium',
+        )}
         onScroll={onScroll}
         // onClick={!isAttachmentModalInput && !canSendPlainText ? handleClick : undefined}
       >
@@ -740,18 +938,27 @@ const MessageInput: FC<OwnProps & StateProps> = ({
           )} */}
           <canvas ref={sharedCanvasRef} className="shared-canvas" />
           <canvas ref={sharedCanvasHqRef} className="shared-canvas" />
-          <div ref={absoluteContainerRef} className="absolute-video-container" />
+          <div
+            ref={absoluteContainerRef}
+            className="absolute-video-container"
+          />
         </div>
       </div>
       <div
         ref={scrollerCloneRef}
-        className={buildClassName('custom-scroll',
+        className={buildClassName(
+          'custom-scroll',
           SCROLLER_CLASS,
           'clone',
-          isNeedPremium && 'is-need-premium')}
+          isNeedPremium && 'is-need-premium',
+        )}
       >
         <div className={inputScrollerContentClass}>
-          <div ref={cloneRef} className={buildClassName(className, 'clone')} dir="auto" />
+          <div
+            ref={cloneRef}
+            className={buildClassName(className, 'clone')}
+            dir="auto"
+          />
         </div>
       </div>
       {captionLimit !== undefined && (
@@ -766,20 +973,27 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         setSelectedRange={setSelectedRange}
         onClose={handleCloseTextFormatter}
       /> */}
-      {forcedPlaceholder && <span className="forced-placeholder">{renderText(forcedPlaceholder!)}</span>}
+      {forcedPlaceholder && (
+        <span className="forced-placeholder">
+          {renderText(forcedPlaceholder!)}
+        </span>
+      )}
     </div>
   );
 };
 
-export default memo(withGlobal<OwnProps>(
-  (global, { chatId, threadId }: OwnProps): StateProps => {
+export default memo(
+  withGlobal<OwnProps>((global, { chatId, threadId }: OwnProps): StateProps => {
     const { messageSendKeyCombo } = global.settings.byKey;
 
     return {
       messageSendKeyCombo,
-      replyInfo: chatId && threadId ? selectDraft(global, chatId, threadId)?.replyInfo : undefined,
+      replyInfo:
+        chatId && threadId
+          ? selectDraft(global, chatId, threadId)?.replyInfo
+          : undefined,
       isSelectModeActive: selectIsInSelectMode(global),
       canPlayAnimatedEmojis: selectCanPlayAnimatedEmojis(global),
     };
-  },
-)(MessageInput));
+  })(MessageInput),
+);

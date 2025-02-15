@@ -269,6 +269,10 @@ export class MarkdownParser {
     // todo check previous char
     const chars = [block[position - 1], block[position], block[position + 1]];
 
+    if (chars[0] !== ' ') {
+      return;
+    }
+
     if (chars[1] === markerChars[0] && chars[2] === markerChars[1]) {
       const last = block.indexOf(marker, position + 2);
       if (last === -1) return;
