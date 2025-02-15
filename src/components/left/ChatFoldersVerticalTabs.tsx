@@ -1,4 +1,4 @@
-import type { TeactNode } from '../../lib/teact/teact';
+import { memo, type TeactNode } from '../../lib/teact/teact';
 import React from '../../lib/teact/teactn';
 
 import type { WithChatFoldersTabsProps } from '../common/hocs/withChatFoldersTabs';
@@ -18,6 +18,7 @@ function ChatFoldersVerticalTabs({
   ...chatFolderTabsProps
 }: OwnProps) {
   if (!('folderTabs' in chatFolderTabsProps)) {
+    // todo render not loaded yet state
     return undefined;
   }
 
@@ -33,4 +34,4 @@ function ChatFoldersVerticalTabs({
   );
 }
 
-export default withChatFoldersTabs(ChatFoldersVerticalTabs);
+export default memo(withChatFoldersTabs(ChatFoldersVerticalTabs));

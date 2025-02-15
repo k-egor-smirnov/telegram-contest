@@ -8,6 +8,7 @@ import type { GlobalState } from '../../global/types';
 import type { FoldersActions } from '../../hooks/reducers/useFoldersReducer';
 import type { ReducerAction } from '../../hooks/useReducer';
 import type { ISettings } from '../../types';
+import type { WithChatFoldersTabsProps } from '../common/hocs/withChatFoldersTabs';
 import { LeftColumnContent, SettingsScreens } from '../../types';
 
 import { selectCurrentChat, selectIsForumPanelOpen, selectTabState } from '../../global/selectors';
@@ -16,8 +17,10 @@ import { captureControlledSwipe } from '../../util/swipeController';
 import {
   IS_APP, IS_FIREFOX, IS_MAC_OS, IS_TOUCH_ENV, LAYERS_ANIMATION_NAME,
 } from '../../util/windowEnvironment';
+import withChatFoldersTabs from '../common/hocs/withChatFoldersTabs';
 
 import useFoldersReducer from '../../hooks/reducers/useFoldersReducer';
+import useAppLayout from '../../hooks/useAppLayout';
 import { useHotkeys } from '../../hooks/useHotkeys';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
@@ -57,8 +60,7 @@ type StateProps = {
   isClosingSearch?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
   isArchivedStoryRibbonShown?: boolean;
-  foldersTabsAppearance: ISettings['foldersTabsAppearance'];
-};
+} & WithChatFoldersTabsProps;
 
 enum ContentType {
   Main,
@@ -609,7 +611,7 @@ function LeftColumn({
   );
 }
 
-export default memo(withGlobal<OwnProps>(
+export default memo(withChatFoldersTabs(withGlobal<OwnProps>(
   (global): StateProps => {
     const tabState = selectTabState(global);
     const {
@@ -657,7 +659,6 @@ export default memo(withGlobal<OwnProps>(
       isClosingSearch: tabState.globalSearch.isClosing,
       archiveSettings,
       isArchivedStoryRibbonShown: isArchivedRibbonShown,
-      foldersTabsAppearance: global.settings.byKey.foldersTabsAppearance,
     };
   },
-)(LeftColumn));
+)(LeftColumn)));

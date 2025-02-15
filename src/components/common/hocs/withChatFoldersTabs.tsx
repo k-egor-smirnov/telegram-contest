@@ -3,6 +3,7 @@ import React, { memo, useEffect, useMemo } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
 import type { ApiChatFolder, ApiChatlistExportedInvite } from '../../../api/types';
+import type { ISettings } from '../../../types';
 import type { MenuItemContextAction } from '../../ui/ListItem';
 import type { TabWithProperties } from '../../ui/TabList';
 
@@ -13,6 +14,7 @@ import { getFolderIconSrcByEmoji } from '../../../util/folderIconsMap';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import { renderTextWithEntities } from '../helpers/renderTextWithEntities';
 
+import useAppLayout from '../../../hooks/useAppLayout';
 import { useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManager';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
@@ -25,6 +27,7 @@ type StateProps = {
   maxFolderInvites: number;
   activeChatFolder: number;
   maxChatLists: number;
+  foldersTabsPreference: ISettings['foldersTabsPreference'];
 };
 
 export type ChatFoldersTabIcon = TabWithProperties & {
@@ -32,17 +35,19 @@ export type ChatFoldersTabIcon = TabWithProperties & {
 };
 
 export type WithChatFoldersTabsProps = {
-  folderTabs: TabWithProperties[];
-  activeChatFolder: number;
-  handleSwitchTab: (tabId: number) => void;
-} | {};
+  folderTabs?: TabWithProperties[];
+  activeChatFolder?: number;
+  handleSwitchTab?: (tabId: number) => void;
+  foldersTabsAppearance?: ISettings['foldersTabsPreference'];
+};
 
 export default function withChatFoldersTabs<T extends Props>(WrappedComponent: FC<T>) {
   function ComponentwithChatFoldersTabsTabs({
     activeChatFolder, chatFoldersById, folderInvitesById, maxChatLists,
-    maxFolderInvites, maxFolders, orderedFolderIds, ...restProps
+    maxFolderInvites, maxFolders, orderedFolderIds, foldersTabsPreference, ...restProps
   }: StateProps & T) {
     const lang = useLang();
+    const { isMobile } = useAppLayout();
     const folderCountersById = useFolderManagerForUnreadCounters();
 
     const {
@@ -51,6 +56,7 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
       openDeleteChatFolderModal,
       openEditChatFolder,
       setActiveChatFolder,
+      loadChatFolders,
     } = getActions();
 
     const handleSwitchTab = useLastCallback((index: number) => {
@@ -65,6 +71,10 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
         excludedChatIds: MEMO_EMPTY_ARRAY,
       } satisfies ApiChatFolder;
     }, [orderedFolderIds, lang]);
+
+    useEffect(() => {
+      loadChatFolders();
+    }, []);
 
     const displayedFolders = useMemo(() => {
       return orderedFolderIds
@@ -163,10 +173,15 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
         } satisfies ChatFoldersTabIcon;
       });
 
-      return { folderTabs, activeChatFolder, handleSwitchTab };
+      return {
+        folderTabs,
+        activeChatFolder,
+        handleSwitchTab,
+        foldersTabsAppearance: isMobile ? 'horizontal' : foldersTabsPreference,
+      };
     }, [
       displayedFolders, maxFolders, folderCountersById, lang, chatFoldersById, maxChatLists, folderInvitesById,
-      maxFolderInvites, activeChatFolder, handleSwitchTab,
+      maxFolderInvites, activeChatFolder, handleSwitchTab, foldersTabsPreference, isMobile,
     ]);
 
     /* eslint-disable-next-line react/jsx-props-no-spreading */
@@ -192,6 +207,7 @@ export default function withChatFoldersTabs<T extends Props>(WrappedComponent: F
       maxFolders: selectCurrentLimit(global, 'dialogFilters'),
       maxFolderInvites: selectCurrentLimit(global, 'chatlistInvites'),
       maxChatLists: selectCurrentLimit(global, 'chatlistJoined'),
+      foldersTabsPreference: global.settings.byKey.foldersTabsPreference,
     };
   })(ComponentwithChatFoldersTabsTabs));
 }

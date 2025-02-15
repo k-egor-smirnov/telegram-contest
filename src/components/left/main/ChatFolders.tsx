@@ -8,6 +8,7 @@ import type { ApiSession } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
 import type { ISettings, LeftColumnContent, SettingsScreens } from '../../../types';
+import type { WithChatFoldersTabsProps } from '../../common/hocs/withChatFoldersTabs';
 
 import { ALL_FOLDER_ID } from '../../../config';
 import { selectTabState } from '../../../global/selectors';
@@ -16,7 +17,9 @@ import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { captureEvents, SwipeDirection } from '../../../util/captureEvents';
 import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
+import withChatFoldersTabs from '../../common/hocs/withChatFoldersTabs';
 
+import useAppLayout from '../../../hooks/useAppLayout';
 import useDerivedState from '../../../hooks/useDerivedState';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
@@ -48,8 +51,7 @@ type StateProps = {
   archiveSettings: GlobalState['archiveSettings'];
   isStoryRibbonShown?: boolean;
   sessions?: Record<string, ApiSession>;
-  foldersTabsAppearance: ISettings['foldersTabsAppearance'];
-};
+} & WithChatFoldersTabsProps;
 
 const SAVED_MESSAGES_HOTKEY = '0';
 
@@ -70,6 +72,8 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   sessions,
   foldersTabsAppearance,
 }) => {
+  const { isMobile } = useAppLayout();
+
   const {
     setActiveChatFolder,
     openChat,
@@ -189,7 +193,9 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
     );
   }
 
-  const shouldRenderFolders = foldersTabsAppearance === 'horizontal' && orderedFolderIds && orderedFolderIds.length > 1;
+  const shouldRenderFolders = foldersTabsAppearance === 'horizontal'
+    && orderedFolderIds
+   && orderedFolderIds.length > 1;
 
   return (
     <div
@@ -219,7 +225,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   );
 };
 
-export default memo(withGlobal<OwnProps>(
+export default memo(withChatFoldersTabs(withGlobal<OwnProps>(
   (global): StateProps => {
     const {
       chatFolders: {
@@ -257,7 +263,6 @@ export default memo(withGlobal<OwnProps>(
       archiveSettings,
       isStoryRibbonShown,
       sessions,
-      foldersTabsAppearance: global.settings.byKey.foldersTabsAppearance,
     };
   },
-)(ChatFolders));
+)(ChatFolders)));

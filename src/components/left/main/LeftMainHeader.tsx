@@ -6,6 +6,7 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { GlobalState } from '../../../global/types';
 import type { ISettings } from '../../../types';
+import type { WithChatFoldersTabsProps } from '../../common/hocs/withChatFoldersTabs';
 import { LeftColumnContent, SettingsScreens } from '../../../types';
 
 import {
@@ -24,6 +25,7 @@ import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { formatDateToString } from '../../../util/dates/dateFormat';
 import { IS_APP, IS_ELECTRON, IS_MAC_OS } from '../../../util/windowEnvironment';
+import withChatFoldersTabs from '../../common/hocs/withChatFoldersTabs';
 
 import useAppLayout from '../../../hooks/useAppLayout';
 import useConnectionStatus from '../../../hooks/useConnectionStatus';
@@ -72,9 +74,8 @@ type StateProps =
     areChatsLoaded?: boolean;
     hasPasscode?: boolean;
     canSetPasscode?: boolean;
-    foldersTabsAppearance: ISettings['foldersTabsAppearance'];
   }
-  & Pick<GlobalState, 'connectionState' | 'isSyncing' | 'isFetchingDifference'>;
+  & Pick<GlobalState, 'connectionState' | 'isSyncing' | 'isFetchingDifference'> & WithChatFoldersTabsProps;
 
 const CLEAR_DATE_SEARCH_PARAM = { date: undefined };
 const CLEAR_CHAT_SEARCH_PARAM = { id: undefined };
@@ -272,7 +273,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   );
 };
 
-export default memo(withGlobal<OwnProps>(
+export default memo(withChatFoldersTabs(withGlobal<OwnProps>(
   (global): StateProps => {
     const tabState = selectTabState(global);
     const {
@@ -301,4 +302,4 @@ export default memo(withGlobal<OwnProps>(
       foldersTabsAppearance: global.settings.byKey.foldersTabsAppearance,
     };
   },
-)(LeftMainHeader));
+)(LeftMainHeader)));

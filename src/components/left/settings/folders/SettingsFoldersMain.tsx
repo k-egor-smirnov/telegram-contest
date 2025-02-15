@@ -43,7 +43,7 @@ type StateProps = {
   recommendedChatFolders?: ApiChatFolder[];
   maxFolders: number;
   isPremium?: boolean;
-  foldersTabsAppearance: ISettings['foldersTabsAppearance'];
+  foldersTabsPreference: ISettings['foldersTabsPreference'];
 };
 
 type SortState = {
@@ -65,7 +65,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
   isPremium,
   recommendedChatFolders,
   maxFolders,
-  foldersTabsAppearance,
+  foldersTabsPreference,
 }) => {
   const {
     loadRecommendedChatFolders,
@@ -196,8 +196,8 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
     });
   }, [sortChatFolders]);
 
-  const handleSetFoldersTabsAppearance = useCallback((position: string) => {
-    setSettingOption({ foldersTabsAppearance: position as ISettings['foldersTabsAppearance'] });
+  const handleSetFoldersTabsPreference = useCallback((position: string) => {
+    setSettingOption({ foldersTabsPreference: position as ISettings['foldersTabsPreference'] });
   }, [setSettingOption]);
 
   const canCreateNewFolder = useMemo(() => {
@@ -387,9 +387,9 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
             { label: 'Tabs on the left', value: 'vertical' },
             { label: 'Tabs on the top', value: 'horizontal' },
           ]}
-          selected={foldersTabsAppearance}
+          selected={foldersTabsPreference}
           name="tabs-position"
-          onChange={handleSetFoldersTabsAppearance}
+          onChange={handleSetFoldersTabsPreference}
         />
       </div>
     </div>
@@ -410,7 +410,7 @@ export default memo(withGlobal<OwnProps>(
       isPremium: selectIsCurrentUserPremium(global),
       recommendedChatFolders,
       maxFolders: selectCurrentLimit(global, 'dialogFilters'),
-      foldersTabsAppearance: global.settings.byKey.foldersTabsAppearance,
+      foldersTabsPreference: global.settings.byKey.foldersTabsPreference,
     };
   },
 )(SettingsFoldersMain));
