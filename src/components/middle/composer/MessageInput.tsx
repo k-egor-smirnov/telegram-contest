@@ -1,12 +1,14 @@
-import type { ChangeEvent, RefObject } from 'react';
+import { type RefObject } from 'react';
 import type { FC } from '../../../lib/teact/teact';
-import React, { memo, useEffect, useRef } from '../../../lib/teact/teact';
+import React, {
+  memo, useEffect, useRef, useState,
+} from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiInputMessageReplyInfo } from '../../../api/types';
 import type { AnyNode, TelegramObjectModel } from '../../../lib/MarkdownParser';
 import type { ISettings, ThreadId } from '../../../types';
 import type { Signal } from '../../../util/signals';
+import { type ApiInputMessageReplyInfo, ApiMessageEntityTypes } from '../../../api/types';
 
 import { EDITABLE_INPUT_ID } from '../../../config';
 import { MarkdownParser } from '../../../lib/MarkdownParser';
@@ -20,6 +22,11 @@ import { generateRandomInt } from '../../../api/gramjs/gramjsBuilders';
 import renderText from '../../common/helpers/renderText';
 
 import useDerivedState from '../../../hooks/useDerivedState';
+import useLastCallback from '../../../hooks/useLastCallback';
+
+import Icon from '../../common/icons/Icon';
+import Button from '../../ui/Button';
+import TextTimer from '../../ui/TextTimer';
 
 import styles from './MessageInput.module.scss';
 
@@ -40,10 +47,10 @@ function getNextNode(node) {
 }
 
 const markersByType = {
-  bold: '**',
-  italic: '__',
+  [ApiMessageEntityTypes.Bold]: '**',
+  [ApiMessageEntityTypes.Italic]: '__',
   block: '',
-  code: '',
+  [ApiMessageEntityTypes.Code]: '```',
 };
 
 function getPreviousNode(node) {
@@ -64,6 +71,28 @@ function getNodesBetween(start: HTMLElement, end: HTMLElement) {
   }
 
   return [...nodes];
+}
+
+function getBlockNodes(el: HTMLElement) {
+  const { type } = el.dataset;
+
+  const nodes = [];
+
+  if (type === ApiMessageEntityTypes.Code) {
+    let startNode = el;
+    while (startNode && !startNode.classList.contains('code-block-start')) {
+      startNode = getPreviousNode(startNode);
+    }
+
+    let nextNode = startNode;
+    while (nextNode && nextNode.dataset.type === ApiMessageEntityTypes.Code) {
+      nodes.push(nextNode);
+
+      nextNode = nextNode.nextElementSibling as HTMLElement;
+    }
+  }
+
+  return nodes;
 }
 
 function getNodesInRange(range: Range) {
@@ -276,7 +305,6 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   ]);
   const commitsOffset = useRef(0);
   const prevSelectionNodes = useRef<[HTMLElement?, HTMLElement?]>([]);
-  const prevCaretPos = useRef<[string, number] | null>(null);
 
   if (ref) {
     inputRef = ref;
@@ -304,15 +332,15 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   // const { isMobile } = useAppLayout();
   // const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
 
-  // const [shouldDisplayTimer, setShouldDisplayTimer] = useState(false);
+  const [shouldDisplayTimer, setShouldDisplayTimer] = useState(false);
 
-  // useEffect(() => {
-  //   setShouldDisplayTimer(Boolean(timedPlaceholderLangKey && timedPlaceholderDate));
-  // }, [timedPlaceholderDate, timedPlaceholderLangKey]);
+  useEffect(() => {
+    setShouldDisplayTimer(Boolean(timedPlaceholderLangKey && timedPlaceholderDate));
+  }, [timedPlaceholderDate, timedPlaceholderLangKey]);
 
-  // const handleTimerEnd = useLastCallback(() => {
-  //   setShouldDisplayTimer(false);
-  // });
+  const handleTimerEnd = useLastCallback(() => {
+    setShouldDisplayTimer(false);
+  });
 
   // useInputCustomEmojis(
   //   getHtml,
@@ -591,7 +619,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 
   useEffect(() => {
     inputRef.current.innerHTML = `${new MarkdownParser().parse(
-      'hello **bold** or __italic__ world __is__ good ```js some code block``` and ```js\nmultiline\ncode\nblock\n```',
+      'hello **bold** or __italic__ world __is__ good ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```',
     ).html}`;
 
     // setTimeout(() => {
@@ -793,12 +821,18 @@ const MessageInput: FC<OwnProps & StateProps> = ({
       const allMarkers = inputRef.current?.querySelectorAll('.marker');
       const keepMarkers = new Set<HTMLElement>();
 
+      const selectedBlockNodes = new Set<HTMLElement>();
+
       getNodesInRange(selection?.getRangeAt(0))
         .filter((v) => v.dataset?.type)
         .forEach((el: HTMLElement) => {
-          const { type } = el.dataset;
+          const { type, block } = el.dataset;
 
-          if (!type || type === 'text') {
+          if (block === '') {
+            selectedBlockNodes.add(el);
+          }
+
+          if (!type || type === 'text' || type === ApiMessageEntityTypes.Code) {
             return;
           }
 
@@ -823,6 +857,50 @@ const MessageInput: FC<OwnProps & StateProps> = ({
           }
         });
 
+      const keepCodeBlockStartNodes = new Set<HTMLElement>();
+      const codeBlocksStartNodes = inputRef.current?.querySelectorAll(`[data-type=${[ApiMessageEntityTypes.Code]}]`)
+      ?? [];
+
+      selectedBlockNodes.forEach((v) => {
+        const blockNodes = getBlockNodes(v);
+        if (!blockNodes?.[0]) {
+          return;
+        }
+
+        const startBlockNode = blockNodes?.[0]!;
+        const endBlockNode = blockNodes.at(-1)!;
+
+        if (startBlockNode.firstChild!.classList.contains('marker')) {
+          keepMarkers.add(startBlockNode.firstChild);
+        } else {
+          const markerNode = document.createElement('span');
+          markerNode.className = 'marker';
+          markerNode.innerHTML = '```';
+          startBlockNode?.insertBefore(markerNode, startBlockNode.firstChild);
+        }
+
+        if (endBlockNode.firstChild!.classList.contains('marker')) {
+          keepMarkers.add(endBlockNode.firstChild);
+        } else {
+          const markerNode = document.createElement('span');
+          markerNode.className = 'marker';
+          markerNode.innerHTML = '```';
+          endBlockNode?.insertBefore(markerNode, endBlockNode.firstChild);
+        }
+
+        // const marker = markersByType[type] ?? '??';
+
+        blockNodes[0].classList?.add('code-block-selected');
+        keepCodeBlockStartNodes.add(blockNodes[0]);
+        // keepMarkers.add(marker);
+      });
+
+      codeBlocksStartNodes.forEach((startNode) => {
+        if (!keepCodeBlockStartNodes.has(startNode)) {
+          startNode.classList?.remove('code-block-selected');
+        }
+      });
+
       allMarkers?.forEach((markerEl) => {
         if (!keepMarkers.has(markerEl)) {
           markerEl.remove();
@@ -836,7 +914,6 @@ const MessageInput: FC<OwnProps & StateProps> = ({
       }
 
       const selection = document.getSelection();
-      console.log(selection?.getRangeAt(0));
 
       prevSelectionNodes.current = getNodesAroundRange(
         document.getSelection()?.getRangeAt(0),
@@ -864,6 +941,8 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     document.addEventListener('selectionchange', handleSelectionChange);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousedown', handleMouseDown);
+
+    onUpdate('test **a** lol');
 
     return () => {
       document.removeEventListener('selectionchange', handleSelectionChange);
@@ -919,7 +998,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
             onFocus={!isNeedPremium ? onFocus : undefined}
             onBlur={!isNeedPremium ? onBlur : undefined}
           />
-          {/* {!forcedPlaceholder && (
+          {!forcedPlaceholder && (
             <span
               className={buildClassName(
                 'placeholder-text',
@@ -933,13 +1012,13 @@ const MessageInput: FC<OwnProps & StateProps> = ({
               {shouldDisplayTimer ? (
                 <TextTimer langKey={timedPlaceholderLangKey!} endsAt={timedPlaceholderDate!} onEnd={handleTimerEnd} />
               ) : placeholder}
-              {isStoryInput && isNeedPremium && (
+              {/* {isStoryInput && isNeedPremium && (
                 <Button className="unlock-button" size="tiny" color="adaptive" onClick={handleOpenPremiumModal}>
                   {lang('StoryRepliesLockedButton')}
                 </Button>
-              )}
+              )} */}
             </span>
-          )} */}
+          )}
           <canvas ref={sharedCanvasRef} className="shared-canvas" />
           <canvas ref={sharedCanvasHqRef} className="shared-canvas" />
           <div

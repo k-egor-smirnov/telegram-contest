@@ -1,4 +1,7 @@
 /* eslint-disable max-classes-per-file */
+import { type ApiFormattedText, type ApiMessageEntity, ApiMessageEntityTypes } from '../api/types';
+
+import buildClassName from '../util/buildClassName';
 import { generateRandomInt } from '../api/gramjs/gramjsBuilders';
 
 interface InlineContext {
@@ -10,7 +13,7 @@ interface InlineContext {
 }
 
 interface BlockContext {
-  startedGroup?: 'code';
+  startedGroup?: [string, string];
 }
 
 interface MessageNode {
@@ -25,7 +28,10 @@ interface BlockMessageNode extends MessageNode {
 }
 
 interface CodeBlockMessageNode extends MessageNode {
-  type: 'code';
+  type: ApiMessageEntityTypes.Code;
+  isStart?: boolean;
+  isEnd?: boolean;
+  language: string;
 }
 
 interface TextMessageNode extends MessageNode {
@@ -33,19 +39,19 @@ interface TextMessageNode extends MessageNode {
 }
 
 interface BoldMessageNode extends MessageNode {
-  type: 'bold';
+  type: ApiMessageEntityTypes.Bold;
 }
 
 interface ItalicMessageNode extends MessageNode {
-  type: 'italic';
+  type: ApiMessageEntityTypes.Italic;
 }
 
 interface UnderlineMessageNode extends MessageNode {
-  type: 'underline';
+  type: ApiMessageEntityTypes.Underline;
 }
 
 interface StrikethroughMessageNode extends MessageNode {
-  type: 'strikethrough';
+  type: ApiMessageEntityTypes.Strike;
 }
 
 interface LinkMessageNode extends MessageNode {
@@ -62,7 +68,7 @@ export type AnyNode = BlockMessageNode | TextMessageNode | BoldMessageNode |
 ItalicMessageNode | UnderlineMessageNode | StrikethroughMessageNode | LinkMessageNode | MentionMessageNode |
 CodeBlockMessageNode;
 
-class TelegramObjectModelNode {
+class TelegramObjectModelNode<T extends AnyNode> {
   #id = generateRandomInt().toString();
 
   #type: string;
@@ -71,23 +77,26 @@ class TelegramObjectModelNode {
 
   #text: string = '';
 
-  #parent: TelegramObjectModelNode | undefined = undefined;
+  #parent: TelegramObjectModelNode<any> | undefined = undefined;
 
-  #children: TelegramObjectModelNode[];
+  #children: TelegramObjectModelNode<any>[];
 
-  constructor(tom: TelegramObjectModel, type: string) {
+  #attrs: Omit<T, 'id' | 'type' | 'children' | 'text'>;
+
+  constructor(tom: TelegramObjectModel, type: T['type'], attrs: Omit<T, 'id' | 'type' | 'children' | 'text'>) {
     this.#tom = tom;
     this.#type = type;
     this.#children = [];
+    this.#attrs = attrs;
   }
 
-  unshiftNode(node: TelegramObjectModelNode) {
+  unshiftNode(node: TelegramObjectModelNode<any>) {
     node.#parent = this;
     this.#children.unshift(node);
     this.#tom.registerNode(node);
   }
 
-  pushNode(node: TelegramObjectModelNode) {
+  pushNode(node: TelegramObjectModelNode<any>) {
     node.#parent = this;
     this.#children.push(node);
     this.#tom.registerNode(node);
@@ -100,7 +109,7 @@ class TelegramObjectModelNode {
     this.#parent?.removeChild(this);
   }
 
-  removeChild(child: TelegramObjectModelNode) {
+  removeChild(child: TelegramObjectModelNode<any>) {
     const index = this.#children.indexOf(child);
 
     if (index === -1) return;
@@ -111,11 +120,11 @@ class TelegramObjectModelNode {
 
   get marker() {
     switch (this.#type) {
-      case 'bold':
+      case ApiMessageEntityTypes.Bold:
         return '**';
-      case 'italic':
+      case ApiMessageEntityTypes.Italic:
         return '__';
-      case 'code':
+      case ApiMessageEntityTypes.Code:
         return '````';
     }
 
@@ -148,7 +157,11 @@ class TelegramObjectModelNode {
     return this.#parent;
   }
 
-  get nextSibling(): TelegramObjectModelNode | undefined {
+  get attrs() {
+    return this.#attrs;
+  }
+
+  get nextSibling(): TelegramObjectModelNode<any> | undefined {
     if (!this.#parent) return undefined;
 
     const index = this.#parent.children.indexOf(this);
@@ -156,7 +169,7 @@ class TelegramObjectModelNode {
     return this.#parent.children[index + 1];
   }
 
-  get previousSibling(): TelegramObjectModelNode | undefined {
+  get previousSibling(): TelegramObjectModelNode<any> | undefined {
     if (!this.#parent) return undefined;
 
     const index = this.#parent.children.indexOf(this);
@@ -166,31 +179,31 @@ class TelegramObjectModelNode {
 }
 
 export class TelegramObjectModel {
-  #nodes: TelegramObjectModelNode[][] = [[]];
+  #nodes: TelegramObjectModelNode<any>[] = [];
 
-  #nodesById: Map<string, TelegramObjectModelNode> = new Map();
+  #nodesById: Map<string, TelegramObjectModelNode<any>> = new Map();
 
-  registerNode(node: TelegramObjectModelNode) {
+  registerNode(node: TelegramObjectModelNode<any>) {
     this.#nodesById.set(node.id, node);
   }
 
-  unregisterNode(node: TelegramObjectModelNode) {
+  unregisterNode(node: TelegramObjectModelNode<any>) {
     this.#nodesById.delete(node.id);
   }
 
-  makeNode(type: AnyNode['type']) {
-    return new TelegramObjectModelNode(this, type);
+  makeNode<T extends AnyNode>(type: T['type'], attrs: Omit<T, 'id' | 'type' | 'children' | 'text'>)
+    : TelegramObjectModelNode<T> {
+    return new TelegramObjectModelNode(this, type, attrs);
   }
 
-  unshiftNode(node: TelegramObjectModelNode) {
+  unshiftNode(node: TelegramObjectModelNode<any>) {
     this.registerNode(node);
-    this.#nodes[0].unshift(node);
+    this.#nodes.unshift(node);
   }
 
-  pushNode(node: TelegramObjectModelNode) {
-    console.trace('push', node, node.type);
+  pushNode(node: TelegramObjectModelNode<any>) {
     this.registerNode(node);
-    this.#nodes[0].push(node);
+    this.#nodes.push(node);
   }
 
   getNodeById(id: string) {
@@ -201,7 +214,7 @@ export class TelegramObjectModel {
     return this.#nodes;
   }
 
-  private renderNode(node: TelegramObjectModelNode): string {
+  private renderNode(node: TelegramObjectModelNode<any>): string {
     const args = `data-id="${node.id}" data-type="${node.type}"`;
     const innerHTML = node.children.map((child) => this.renderNode(child)).join('');
 
@@ -209,18 +222,91 @@ export class TelegramObjectModel {
 
     switch (node.type) {
       case 'text': return `<span ${args}>${node.text ?? ''}</span>`;
-      case 'bold': return `<strong ${args}>${innerHTML}</strong>`;
-      case 'italic': return `<i ${args}>${innerHTML}</i>`;
+      case ApiMessageEntityTypes.Bold: return `<strong ${args}>${innerHTML}</strong>`;
+      case ApiMessageEntityTypes.Italic: return `<i ${args}>${innerHTML}</i>`;
       case 'block': return `<div ${args} data-block>${innerHTML}</div>`;
-      case 'code': return `<pre ${args} data-block>${innerHTML}</pre>`;
+      case ApiMessageEntityTypes.Code:
+        return `<pre ${args} data-block class="${buildClassName(node.attrs.isStart && 'code-block-start')}">${innerHTML}</pre>`;
       default: return innerHTML ?? '';
     }
   }
 
   get html(): string {
     return this.children.map((block) => {
-      return block.map((node) => this.renderNode(node)).join('');
+      return this.renderNode(block);
     }).join('');
+  }
+
+  get apiText(): ApiFormattedText {
+    let text: string = '';
+    const entities: ApiMessageEntity[] = [];
+
+    let blockText = '';
+
+    function nextNode(node: TelegramObjectModelNode<any>) {
+      if (node.type === 'text') {
+        blockText += node.text;
+        return;
+      }
+
+      // todo maybe add offset for \n symbols
+      const start = blockText.length;
+
+      for (const child of node.children) {
+        nextNode(child);
+      }
+
+      let apiType: ApiMessageEntity['type'];
+      switch (node.type) {
+        case ApiMessageEntityTypes.Bold:
+          apiType = ApiMessageEntityTypes.Bold;
+          break;
+        case ApiMessageEntityTypes.Italic:
+          apiType = ApiMessageEntityTypes.Italic;
+          break;
+        default:
+          apiType = ApiMessageEntityTypes.Unknown;
+      }
+
+      const entity: ApiMessageEntity = {
+        type: apiType,
+        offset: start,
+        length: blockText.length - start,
+      };
+
+      entities.push(entity);
+    }
+
+    for (let i = 0; i < this.children.length; i++) {
+      const block = this.children[i];
+
+      blockText = '';
+
+      for (const inlineChild of block.children) {
+        nextNode(inlineChild);
+      }
+
+      if (block.type === ApiMessageEntityTypes.Code) {
+        entities.push({
+          type: block.type,
+          offset: text.length,
+          length: blockText.length,
+        });
+      }
+
+      text += blockText;
+
+      if (i !== this.children.length - 1) {
+        text += '\n';
+      }
+    }
+
+    console.log(text, entities);
+
+    return {
+      text,
+      entities,
+    };
   }
 }
 
@@ -235,12 +321,19 @@ export class MarkdownParser {
     for (let i = 0; i < blocks.length; i++) {
       const blockText = blocks[i];
 
-      // Force convert inline Markdown to block
+      // Force convert Markdown to block
       const codeBlockStart = blockText.indexOf('```');
-      if (codeBlockStart !== -1) {
+      if (codeBlockStart !== -1 && codeBlockStart !== 0) {
         const codeBlockEnd = blockText.indexOf('```', codeBlockStart + 3);
 
-        if (codeBlockEnd !== -1) {
+        if (codeBlockEnd === -1) {
+          blocks.splice(
+            i,
+            1,
+            blockText.slice(0, codeBlockStart),
+            '```',
+          );
+        } else {
           blocks.splice(
             i,
             1,
@@ -273,7 +366,7 @@ export class MarkdownParser {
     const ctx: InlineContext = {
       position: 0,
       block,
-      result: this.#tom.makeNode('block'),
+      result: this.#tom.makeNode('block', {}),
       usedMarkers: [],
     };
 
@@ -296,7 +389,7 @@ export class MarkdownParser {
         if (lastChild?.type === 'text') {
           lastChild.text += char;
         } else {
-          const node = this.#tom.makeNode('text');
+          const node = this.#tom.makeNode('text', {});
           node.text = char;
 
           ctx.result.pushNode(node);
@@ -309,24 +402,26 @@ export class MarkdownParser {
 
   private parseCode(ctx: BlockContext, block: string) {
     const isCorner = block.startsWith('```');
-    if (!block.startsWith('```') && ctx.startedGroup !== 'code') {
+    if (!block.startsWith('```') && ctx.startedGroup?.[0] !== 'code') {
       return false;
     }
 
-    if (isCorner) {
-      if (ctx.startedGroup === 'code') {
-        ctx.startedGroup = undefined;
-      } else {
-        ctx.startedGroup = 'code';
-      }
-    }
-
-    const codeNode = this.#tom.makeNode('code');
-    const textNode = this.#tom.makeNode('text');
+    const textNode = this.#tom.makeNode('text', {});
 
     textNode.text = block.replace(/^```/, '').replace(/```$/, '');
 
-    codeNode.children.push(textNode);
+    const codeNode = this.#tom.makeNode(ApiMessageEntityTypes.Code, {
+      isStart: isCorner && ctx.startedGroup?.[0] !== 'code',
+      isEnd: isCorner && ctx.startedGroup?.[0] === 'code',
+    });
+
+    if (isCorner && ctx.startedGroup?.[0] === 'code') {
+      ctx.startedGroup = undefined;
+    } else if (isCorner) {
+      ctx.startedGroup = ['code', codeNode.id];
+    }
+
+    codeNode.pushNode(textNode);
 
     this.#tom.pushNode(codeNode);
 
@@ -344,7 +439,7 @@ export class MarkdownParser {
     // todo check previous char
     const chars = [block[position - 1], block[position], block[position + 1]];
 
-    if (chars[0] !== ' ') {
+    if (chars[0] !== ' ' && position !== 0) {
       return;
     }
 
@@ -353,7 +448,7 @@ export class MarkdownParser {
       if (last === -1) return;
       const text = block.slice(position + 2, last);
 
-      const childNode = this.#tom.makeNode(astType);
+      const childNode = this.#tom.makeNode(astType, {});
 
       const childrenCtx: InlineContext = {
         block: text,
@@ -371,10 +466,10 @@ export class MarkdownParser {
   }
 
   private parseEmphasis(ctx: InlineContext) {
-    this.parseBase(ctx, 'bold', '**');
+    this.parseBase(ctx, ApiMessageEntityTypes.Bold, '**');
   }
 
   private parseItalic(ctx: InlineContext) {
-    this.parseBase(ctx, 'italic', '__');
+    this.parseBase(ctx, ApiMessageEntityTypes.Bold, '__');
   }
 }

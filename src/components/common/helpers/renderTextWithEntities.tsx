@@ -154,6 +154,8 @@ export function renderTextWithEntities({
       });
     }
 
+    // console.log(entity, entityContent);
+
     // Render the entity itself
     const newEntity = shouldRenderAsHtml
       ? processEntityAsHtml(entity, entityContent, nestedEntityContent)
