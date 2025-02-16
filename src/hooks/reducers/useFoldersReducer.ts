@@ -140,7 +140,7 @@ const foldersReducer: StateReducer<FoldersState, FoldersActions> = (
         ...state,
         folder: {
           ...state.folder,
-          title: { text: action.payload },
+          title: action.payload,
         },
         isTouched: true,
       };

@@ -21,6 +21,8 @@ import renderText from '../../common/helpers/renderText';
 
 import useDerivedState from '../../../hooks/useDerivedState';
 
+import styles from './MessageInput.module.scss';
+
 // const CONTEXT_MENU_CLOSE_DELAY_MS = 100;
 // // Focus slows down animation, also it breaks transition layout in Chrome
 // const FOCUS_DELAY_MS = 350;
@@ -40,6 +42,8 @@ function getNextNode(node) {
 const markersByType = {
   bold: '**',
   italic: '__',
+  block: '',
+  code: '',
 };
 
 function getPreviousNode(node) {
@@ -586,9 +590,9 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   }
 
   useEffect(() => {
-    inputRef.current.innerHTML = `<div>${new MarkdownParser().parse(
-      'hello **bold** or __italic__ world __is__ good',
-    ).html}</div>`;
+    inputRef.current.innerHTML = `${new MarkdownParser().parse(
+      'hello **bold** or __italic__ world __is__ good ```js some code block``` and ```js\nmultiline\ncode\nblock\n```',
+    ).html}`;
 
     // setTimeout(() => {
     //   undo();
@@ -616,14 +620,11 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         return;
       }
 
-      console.trace('test', textStack[0]);
-
       const result = new MarkdownParser().parse(textStack[0]);
       const fakeNode = document.createElement('div');
       fakeNode.innerHTML = result.html;
-      console.log('html', result.html);
 
-      [...fakeNode.children].forEach((fakeNodeChildren) => {
+      [...fakeNode.children[0].children].forEach((fakeNodeChildren) => {
         targetNode.parentElement.insertBefore(fakeNodeChildren, targetNode);
       });
 
@@ -803,27 +804,22 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 
           const marker = markersByType[type] ?? '??';
 
-          if (marker) {
-            if (el.firstChild?.classList.contains('marker')) {
-              keepMarkers.add(el.firstChild as HTMLElement);
-            } else {
-              const leftMarkerNode = document.createElement('span');
-              leftMarkerNode.className = 'marker';
-              leftMarkerNode.innerHTML = marker;
-              console.log('insert marker');
-              el?.insertBefore(leftMarkerNode, el.firstChild);
-            }
-
-            if (el.lastChild?.classList.contains('marker')) {
-              keepMarkers.add(el.lastChild as HTMLElement);
-            } else {
-              const rightMarkerNode = document.createElement('span');
-              rightMarkerNode.className = 'marker';
-              rightMarkerNode.innerHTML = marker;
-              el?.appendChild(rightMarkerNode);
-            }
+          if (el.firstChild?.classList.contains('marker')) {
+            keepMarkers.add(el.firstChild as HTMLElement);
           } else {
-            console.warn('not found marker', nodeModel, el);
+            const leftMarkerNode = document.createElement('span');
+            leftMarkerNode.className = 'marker';
+            leftMarkerNode.innerHTML = marker;
+            el?.insertBefore(leftMarkerNode, el.firstChild);
+          }
+
+          if (el.lastChild?.classList.contains('marker')) {
+            keepMarkers.add(el.lastChild as HTMLElement);
+          } else {
+            const rightMarkerNode = document.createElement('span');
+            rightMarkerNode.className = 'marker';
+            rightMarkerNode.innerHTML = marker;
+            el?.appendChild(rightMarkerNode);
           }
         });
 
@@ -835,6 +831,13 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     }
 
     function handleSelectionChange() {
+      if (!document.getSelection()?.rangeCount) {
+        return;
+      }
+
+      const selection = document.getSelection();
+      console.log(selection?.getRangeAt(0));
+
       prevSelectionNodes.current = getNodesAroundRange(
         document.getSelection()?.getRangeAt(0),
       );
@@ -875,6 +878,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   );
 
   const className = buildClassName(
+    styles.form,
     'form-control allow-selection',
     isTouched && 'touched',
     shouldSuppressFocus && 'focus-disabled',

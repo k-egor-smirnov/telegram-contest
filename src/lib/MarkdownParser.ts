@@ -9,6 +9,10 @@ interface InlineContext {
   usedMarkers: string[];
 }
 
+interface BlockContext {
+  startedGroup?: 'code';
+}
+
 interface MessageNode {
   id: string;
   type: string;
@@ -18,6 +22,10 @@ interface MessageNode {
 
 interface BlockMessageNode extends MessageNode {
   type: 'block';
+}
+
+interface CodeBlockMessageNode extends MessageNode {
+  type: 'code';
 }
 
 interface TextMessageNode extends MessageNode {
@@ -51,7 +59,8 @@ interface MentionMessageNode extends MessageNode {
 }
 
 export type AnyNode = BlockMessageNode | TextMessageNode | BoldMessageNode |
-ItalicMessageNode | UnderlineMessageNode | StrikethroughMessageNode | LinkMessageNode | MentionMessageNode;
+ItalicMessageNode | UnderlineMessageNode | StrikethroughMessageNode | LinkMessageNode | MentionMessageNode |
+CodeBlockMessageNode;
 
 class TelegramObjectModelNode {
   #id = generateRandomInt().toString();
@@ -101,10 +110,16 @@ class TelegramObjectModelNode {
   }
 
   get marker() {
-    if (this.#type === 'bold') return '**';
-    else if (this.#type === 'italic') return '__';
+    switch (this.#type) {
+      case 'bold':
+        return '**';
+      case 'italic':
+        return '__';
+      case 'code':
+        return '````';
+    }
 
-    return '';
+    return ' ';
   }
 
   get id() {
@@ -173,6 +188,7 @@ export class TelegramObjectModel {
   }
 
   pushNode(node: TelegramObjectModelNode) {
+    console.trace('push', node, node.type);
     this.registerNode(node);
     this.#nodes[0].push(node);
   }
@@ -195,14 +211,16 @@ export class TelegramObjectModel {
       case 'text': return `<span ${args}>${node.text ?? ''}</span>`;
       case 'bold': return `<strong ${args}>${innerHTML}</strong>`;
       case 'italic': return `<i ${args}>${innerHTML}</i>`;
+      case 'block': return `<div ${args} data-block>${innerHTML}</div>`;
+      case 'code': return `<pre ${args} data-block>${innerHTML}</pre>`;
       default: return innerHTML ?? '';
     }
   }
 
   get html(): string {
     return this.children.map((block) => {
-      return block.map((node) => this.renderNode(node));
-    }).join('\n');
+      return block.map((node) => this.renderNode(node)).join('');
+    }).join('');
   }
 }
 
@@ -212,12 +230,46 @@ export class MarkdownParser {
   parse(text: string): TelegramObjectModel {
     const blocks = text.split('\n');
 
-    blocks.forEach((block) => this.parseBlock(block).result);
+    let startedGroup: BlockContext['startedGroup'];
+
+    for (let i = 0; i < blocks.length; i++) {
+      const blockText = blocks[i];
+
+      // Force convert inline Markdown to block
+      const codeBlockStart = blockText.indexOf('```');
+      if (codeBlockStart !== -1) {
+        const codeBlockEnd = blockText.indexOf('```', codeBlockStart + 3);
+
+        if (codeBlockEnd !== -1) {
+          blocks.splice(
+            i,
+            1,
+            blockText.slice(0, codeBlockStart),
+            '```',
+            blockText.slice(codeBlockStart + 3, codeBlockEnd),
+            '```',
+            blockText.slice(codeBlockEnd + 3),
+          );
+        }
+      }
+    }
+
+    const ctx: BlockContext = {
+      startedGroup,
+    };
+
+    blocks.forEach((block) => {
+      this.parseBlock(ctx, block);
+    });
 
     return this.#tom;
   }
 
-  private parseBlock(block: string) {
+  private parseBlock(blockContext: BlockContext, block: string) {
+    if (this.parseCode(blockContext, block)) {
+      return;
+    }
+
     const ctx: InlineContext = {
       position: 0,
       block,
@@ -226,10 +278,7 @@ export class MarkdownParser {
     };
 
     this.parseInline(ctx);
-
     this.#tom.pushNode(ctx.result);
-
-    return ctx;
   }
 
   private parseInline(ctx: InlineContext) {
@@ -256,6 +305,32 @@ export class MarkdownParser {
         ctx.position += 1;
       }
     }
+  }
+
+  private parseCode(ctx: BlockContext, block: string) {
+    const isCorner = block.startsWith('```');
+    if (!block.startsWith('```') && ctx.startedGroup !== 'code') {
+      return false;
+    }
+
+    if (isCorner) {
+      if (ctx.startedGroup === 'code') {
+        ctx.startedGroup = undefined;
+      } else {
+        ctx.startedGroup = 'code';
+      }
+    }
+
+    const codeNode = this.#tom.makeNode('code');
+    const textNode = this.#tom.makeNode('text');
+
+    textNode.text = block.replace(/^```/, '').replace(/```$/, '');
+
+    codeNode.children.push(textNode);
+
+    this.#tom.pushNode(codeNode);
+
+    return true;
   }
 
   private parseBase(ctx: InlineContext, astType: AnyNode['type'], marker: string) {

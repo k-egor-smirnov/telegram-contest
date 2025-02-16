@@ -13,28 +13,32 @@
   transition: 0.25s ease-in-out color;
   cursor: pointer;
   position: relative;
+}
 
-  .badge {
-    position: absolute;
-    top: 0.135rem;
-    right: 1.20rem;
-    min-width: 1.12rem;
-    height: 1.12rem;
-    margin-inline-start: 0.5rem;
-    background: var(--color-gray);
-    border-radius: 0.75rem;
-    padding: 0 0.3125rem;
-    color: white;
-    font-size: 0.75rem;
-    line-height: 1.1rem;
-    font-weight: var(--font-weight-medium);
-    text-align: center;
-    flex-shrink: 0;
-  }
+.blocked {
+  opacity: 0.7;
+}
 
-  .badgeActive {
-    background: var(--color-primary);
-  }
+.badge {
+  position: absolute;
+  top: 0.135rem;
+  right: 1.20rem;
+  min-width: 1.12rem;
+  height: 1.12rem;
+  margin-inline-start: 0.5rem;
+  background: var(--color-gray);
+  border-radius: 0.75rem;
+  padding: 0 0.3125rem;
+  color: white;
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.badgeActive {
+  background: var(--color-primary);
 }
 
 .tab:focus {
@@ -60,4 +64,9 @@
   height: 100%;
   background-color: currentColor;
   transition: 0.10s ease-in-out background-color;
+}
+
+.title {
+  display: flex;
+  align-items: center;
 }

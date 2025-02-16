@@ -4,40 +4,33 @@ import React, {
 } from '../../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../../global';
 
-import type { ApiChatlistExportedInvite } from '../../../../api/types';
+import type { ApiChatlistExportedInvite, ApiMessageEntityCustomEmoji, ApiSticker } from '../../../../api/types';
 import type {
   FolderEditDispatch,
   FoldersState,
 } from '../../../../hooks/reducers/useFoldersReducer';
+import { ApiMessageEntityTypes } from '../../../../api/types';
 
-import { STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
+import { FOLDER_SYMBOL_SET_ID, STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
 import { isUserId } from '../../../../global/helpers';
 import { selectCanShareFolder } from '../../../../global/selectors';
 import { selectCurrentLimit } from '../../../../global/selectors/limits';
-import buildClassName from '../../../../util/buildClassName';
-import { getEnabledFolderIcons, getFolderIconSrcByEmoji, pickFolderIconByName } from '../../../../util/folderIconsMap';
 import { findIntersectionWithSet } from '../../../../util/iteratees';
 import { MEMO_EMPTY_ARRAY } from '../../../../util/memo';
 import { CUSTOM_PEER_EXCLUDED_CHAT_TYPES, CUSTOM_PEER_INCLUDED_CHAT_TYPES } from '../../../../util/objects/customPeer';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
 
 import { selectChatFilters } from '../../../../hooks/reducers/useFoldersReducer';
-import useAppLayout from '../../../../hooks/useAppLayout';
 import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useOldLang from '../../../../hooks/useOldLang';
 
 import AnimatedIcon from '../../../common/AnimatedIcon';
 import GroupChatInfo from '../../../common/GroupChatInfo';
 import Icon from '../../../common/icons/Icon';
-import MaskIcon from '../../../common/icons/MaskIcon';
 import PrivateChatInfo from '../../../common/PrivateChatInfo';
-import SymbolMenu from '../../../middle/composer/SymbolMenu';
-import SymbolMenuButton from '../../../middle/composer/SymbolMenuButton';
-import Button from '../../../ui/Button';
 import FloatingActionButton from '../../../ui/FloatingActionButton';
 import InputText from '../../../ui/InputText';
 import ListItem from '../../../ui/ListItem';
-import ResponsiveHoverButton from '../../../ui/ResponsiveHoverButton';
 import Spinner from '../../../ui/Spinner';
 import SettingsFoldersSymbolMenuButton from './SettingsFoldersSymbolMenuButton';
 
@@ -164,11 +157,44 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
 
   const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { currentTarget } = event;
-    dispatch({ type: 'setTitle', payload: currentTarget.value.trim() });
-  }, [dispatch]);
+    dispatch({ type: 'setTitle', payload: { ...state.folder.title, text: currentTarget.value.trim() } });
+  }, [dispatch, state.folder.title]);
 
-  const handleEmoticonSet = useCallback((emoticon: string) => {
-    dispatch({ type: 'setEmoticon', payload: emoticon });
+  const handleEmoticonSet = useCallback((sticker: ApiSticker) => {
+    if ('id' in sticker.stickerSetInfo && sticker.stickerSetInfo.id === FOLDER_SYMBOL_SET_ID) {
+      dispatch({ type: 'setEmoticon', payload: sticker.emoji! });
+    } else {
+      const entity: ApiMessageEntityCustomEmoji = {
+        type: ApiMessageEntityTypes.CustomEmoji,
+        documentId: sticker.id,
+        length: sticker.emoji!.length,
+        offset: 0,
+      };
+      console.log(sticker, `${sticker.emoji!} ${state.folder.title.text}`);
+
+      let text = state.folder.title.text;
+
+      const firstEntity = state.folder.title.entities?.[0];
+      if (firstEntity?.type === ApiMessageEntityTypes.CustomEmoji) {
+        text = text.substring(0, firstEntity.offset) + text.substring(firstEntity.offset + firstEntity.length);
+        state.folder.title.entities![0] = entity;
+      } else {
+        state.folder.title.entities!.unshift(entity);
+      }
+
+      text = `${sticker.emoji} ${text}`;
+
+      dispatch({
+        type: 'setTitle',
+        payload: {
+          text,
+          entities: [
+            entity,
+            ...(state.folder.title.entities || []),
+          ],
+        },
+      });
+    }
   }, [dispatch]);
 
   const handleSubmit = useCallback(() => {
@@ -322,13 +348,12 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
 
             <SettingsFoldersSymbolMenuButton
               closeSymbolMenu={() => {
-                console.trace('close');
                 setSymbolPickerOpened(false);
               }}
+              emoticon={state.folder.emoticon}
               isAttachmentModal
-              onEmojiSelect={handleEmoticonSet}
+              onCustomEmojiSelect={handleEmoticonSet}
               openSymbolMenu={() => {
-                console.trace('open');
                 setSymbolPickerOpened(true);
               }}
               buttonClassName="smaller"

@@ -92,9 +92,22 @@
   }
 
   .symbol-menu-button {
-    position: relative;
-    top: -45px;
-    right: -156px;
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+  }
+
+  .symbol-menu-trigger {
+    top: 0;
+    right: 0;
+    bottom: unset;
+  }
+
+  .symbol-menu-icon {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
   }
 }
 

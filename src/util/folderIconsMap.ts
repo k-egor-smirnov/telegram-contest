@@ -1,5 +1,3 @@
-import folders_cat from '../assets/icons/folder/folders_cat.png';
-import folders_cat_2x from '../assets/icons/folder/folders_cat@2x.png';
 import folders_all from '../assets/icons/folder/ic_allchats.png';
 import folders_all_2x from '../assets/icons/folder/ic_allchats@2x.png';
 import folders_animal from '../assets/icons/folder/ic_animal.png';
@@ -8,8 +6,6 @@ import folders_book from '../assets/icons/folder/ic_book.png';
 import folders_book_2x from '../assets/icons/folder/ic_book@2x.png';
 import folders_bot from '../assets/icons/folder/ic_bot.png';
 import folders_bot_2x from '../assets/icons/folder/ic_bot@2x.png';
-import folders_channel from '../assets/icons/folder/ic_channel.png';
-import folders_channel_2x from '../assets/icons/folder/ic_channel@2x.png';
 import folders_coin from '../assets/icons/folder/ic_coin.png';
 import folders_coin_2x from '../assets/icons/folder/ic_coin@2x.png';
 import folders_flash from '../assets/icons/folder/ic_flash.png';
@@ -50,14 +46,13 @@ import folders_student from '../assets/icons/folder/ic_student.png';
 import folders_student_2x from '../assets/icons/folder/ic_student@2x.png';
 import folders_telegram from '../assets/icons/folder/ic_telegram.png';
 import folders_telegram_2x from '../assets/icons/folder/ic_telegram@2x.png';
-import folders_unmuted from '../assets/icons/folder/ic_unmuted.png';
-import folders_unmuted_2x from '../assets/icons/folder/ic_unmuted@2x.png';
 import folders_unread from '../assets/icons/folder/ic_unread.png';
 import folders_unread_2x from '../assets/icons/folder/ic_unread@2x.png';
 import folders_work from '../assets/icons/folder/ic_work.png';
 import folders_work_2x from '../assets/icons/folder/ic_work@2x.png';
 
 const FOLDER_ICONS_MAP: Record<string, [string, string]> = {
+  '🗂': [folders_folder, folders_folder_2x],
   '🐱': [folders_animal, folders_animal_2x],
   '📕': [folders_book, folders_book_2x],
   '💰': [folders_coin, folders_coin_2x],
@@ -83,7 +78,6 @@ const FOLDER_ICONS_MAP: Record<string, [string, string]> = {
   '✅': [folders_read, folders_read_2x],
   '☑️': [folders_unread, folders_unread_2x],
   '🤖': [folders_bot, folders_bot_2x],
-  '🗂': [folders_folder, folders_folder_2x],
 };
 
 export function getFolderIconSrcByEmoji(emoji: string): string {

@@ -3,7 +3,7 @@ import React, { memo, useRef } from '../../../lib/teact/teact';
 
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
-import { EMOJI_SIZE_PICKER, RECENT_SYMBOL_SET_ID } from '../../../config';
+import { EMOJI_SIZE_PICKER, FOLDER_SYMBOL_SET_ID, RECENT_SYMBOL_SET_ID } from '../../../config';
 import buildClassName from '../../../util/buildClassName';
 import windowSize from '../../../util/windowSize';
 import { REM } from '../../common/helpers/mediaDimensions';
@@ -51,6 +51,16 @@ const EmojiCategory: FC<OwnProps> = ({
   const height = Math.ceil(category.emojis.length / emojisPerRow)
     * (EMOJI_SIZE_PICKER + (isMobile ? EMOJI_VERTICAL_MARGIN_MOBILE : EMOJI_VERTICAL_MARGIN));
 
+  let name: string;
+  if (category.id === RECENT_SYMBOL_SET_ID) {
+    name = lang('RecentStickers');
+  } else if (category.id === FOLDER_SYMBOL_SET_ID) {
+    // TODO set valid lang key
+    name = lang('FolderIcons');
+  } else {
+    name = lang(`Emoji${index}`);
+  }
+
   return (
     <div
       ref={ref}
@@ -60,7 +70,7 @@ const EmojiCategory: FC<OwnProps> = ({
     >
       <div className="symbol-set-header">
         <p className="symbol-set-name" dir="auto">
-          {lang(category.id === RECENT_SYMBOL_SET_ID ? 'RecentStickers' : `Emoji${index}`)}
+          {name}
         </p>
       </div>
       <div

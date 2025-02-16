@@ -7,13 +7,18 @@ import type { IAnchorPosition } from '../../../../types';
 
 import { EDITABLE_INPUT_CSS_SELECTOR, EDITABLE_INPUT_MODAL_CSS_SELECTOR } from '../../../../config';
 import buildClassName from '../../../../util/buildClassName';
+import { getFolderIconSrcByEmoji } from '../../../../util/folderIconsMap';
 
 import useFlag from '../../../../hooks/useFlag';
 import useLastCallback from '../../../../hooks/useLastCallback';
 
+import CustomEmojiPicker from '../../../common/CustomEmojiPicker';
 import Icon from '../../../common/icons/Icon';
+import MaskIcon from '../../../common/icons/MaskIcon';
 import SymbolMenu from '../../../middle/composer/SymbolMenu';
 import Button from '../../../ui/Button';
+import Menu from '../../../ui/Menu';
+import Portal from '../../../ui/Portal';
 import ResponsiveHoverButton from '../../../ui/ResponsiveHoverButton';
 import Spinner from '../../../ui/Spinner';
 
@@ -36,6 +41,7 @@ type OwnProps = {
   canSendPlainText?: boolean;
   className?: string;
   inputCssSelector?: string;
+  emoticon?: string;
 };
 
 const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
@@ -54,6 +60,7 @@ const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
   onRemoveSymbol,
   onEmojiSelect,
   closeSendAsMenu,
+  emoticon,
 }) => {
   const {
     setStickerSearchQuery,
@@ -85,16 +92,6 @@ const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
     setContextMenuAnchor({ x, y });
   });
 
-  const handleSearchOpen = useLastCallback((type: 'stickers' | 'gifs') => {
-    if (type === 'stickers') {
-      setStickerSearchQuery({ query: '' });
-      setGifSearchQuery({ query: undefined });
-    } else {
-      setGifSearchQuery({ query: '' });
-      setStickerSearchQuery({ query: undefined });
-    }
-  });
-
   const handleSymbolMenuOpen = useLastCallback(() => {
     const messageInput = document.querySelector<HTMLDivElement>(
       EDITABLE_INPUT_MODAL_CSS_SELECTOR,
@@ -112,9 +109,11 @@ const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
   });
 
   const getTriggerElement = useLastCallback(() => triggerRef.current);
-  const getRootElement = useLastCallback(() => triggerRef.current?.closest('.title-container'));
+  const getRootElement = useLastCallback(() => triggerRef.current?.closest('#Settings'));
   const getMenuElement = useLastCallback(() => document.querySelector('#portals .SymbolMenu .bubble'));
   const getLayout = useLastCallback(() => ({ withPortal: true }));
+
+  const isOpen = isSymbolMenuOpen || Boolean(isSymbolMenuForced);
 
   return (
     <>
@@ -126,8 +125,7 @@ const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
           onClick={isSymbolMenuOpen ? closeSymbolMenu : handleSymbolMenuOpen}
           ariaLabel="Choose emoji, sticker or GIF"
         >
-          <Icon name="smile" />
-          <Icon name="keyboard" />
+          <MaskIcon src={getFolderIconSrcByEmoji(emoticon!)} className="symbol-menu-icon" />
           {isSymbolMenuOpen && !isSymbolMenuLoaded && <Spinner color="gray" />}
         </Button>
       ) : (
@@ -139,31 +137,39 @@ const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
           ariaLabel="Choose emoji, sticker or GIF"
         >
           <div ref={triggerRef} className="symbol-menu-trigger" />
-          <Icon name="smile" />
+          <MaskIcon src={getFolderIconSrcByEmoji(emoticon!)} className="symbol-menu-icon" />
         </ResponsiveHoverButton>
       )}
 
-      <SymbolMenu
-        isOpen={isSymbolMenuOpen || Boolean(isSymbolMenuForced)}
-        canSendGifs={false}
-        canSendStickers={false}
-        isMessageComposer={isMessageComposer}
-        idPrefix={idPrefix}
-        onLoad={onSymbolMenuLoadingComplete}
-        onClose={closeSymbolMenu}
-        onEmojiSelect={onEmojiSelect}
-        onCustomEmojiSelect={onCustomEmojiSelect}
-        onRemoveSymbol={onRemoveSymbol}
-        onSearchOpen={handleSearchOpen}
-        isAttachmentModal
-        canSendPlainText
-        className={buildClassName(className, forceDarkTheme && 'component-theme-dark')}
-        anchor={contextMenuAnchor}
-        getTriggerElement={getTriggerElement}
-        getRootElement={getRootElement}
-        getMenuElement={getMenuElement}
-        getLayout={getLayout}
-      />
+      <Portal>
+        <Menu
+          isOpen={isOpen}
+          noCompact
+          positionX="right"
+          onClose={closeSymbolMenu}
+          // bubbleClassName={styles.menuContent}
+          // transformOriginX={transformOriginX.current}
+          // noCloseOnBackdrop={isContextMenuShown}
+          getRootElement={getRootElement}
+          getMenuElement={getMenuElement}
+          getTriggerElement={getTriggerElement}
+          getLayout={getLayout}
+          anchor={contextMenuAnchor}
+          withPortal
+        >
+          <CustomEmojiPicker
+            idPrefix="folder-icon-emoji-set-"
+            loadAndPlay={isOpen}
+            isHidden={!isOpen}
+            isFolderIconPicker
+            isTranslucent
+            // onContextMenuOpen={markContextMenuShown}
+            // onContextMenuClose={unmarkContextMenuShown}
+            onCustomEmojiSelect={onCustomEmojiSelect}
+            // onContextMenuClick={onClose}
+          />
+        </Menu>
+      </Portal>
     </>
   );
 };

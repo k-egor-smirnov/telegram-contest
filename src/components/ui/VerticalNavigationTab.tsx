@@ -27,7 +27,6 @@ type OwnProps = {
   icon: string;
   badgeCount?: number;
   isBadgeActive?: boolean;
-  previousActiveTab?: number;
   onClick?: (arg: number) => void;
   clickArg?: number;
   contextActions?: MenuItemContextAction[];
@@ -36,7 +35,7 @@ type OwnProps = {
 
 export function VerticalNavigationTab({
   onClick, className, title, badgeCount, isBadgeActive, icon,
-  clickArg, contextActions, contextRootElementSelector, isActive, isBlocked, previousActiveTab,
+  clickArg, contextActions, contextRootElementSelector, isActive, isBlocked,
 }: OwnProps) {
   // eslint-disable-next-line no-null/no-null
   const tabRef = useRef<HTMLButtonElement>(null);
@@ -70,7 +69,13 @@ export function VerticalNavigationTab({
 
   return (
     <button
-      className={buildClassName(styles.tab, onClick && styles.interactive, className, isActive && styles.active)}
+      className={buildClassName(
+        styles.tab,
+        onClick && styles.interactive,
+        className,
+        isActive && styles.active,
+        isBlocked && styles.blocked,
+      )}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
       onContextMenu={handleContextMenu}
@@ -79,12 +84,13 @@ export function VerticalNavigationTab({
       <div className={styles.icon}>
         {typeof icon === 'string' ? <MaskIcon src={icon} className={styles.maskIcon} /> : icon}
       </div>
-      {typeof title === 'string' ? renderText(title) : title}
+      <div className={styles.title}>
+        {isBlocked && <Icon name="lock-badge" className="blocked" />}
+        {typeof title === 'string' ? renderText(title) : title}
+      </div>
       {Boolean(badgeCount) && (
         <span className={buildClassName(styles.badge, isBadgeActive && styles.badgeActive)}>{badgeCount}</span>
       )}
-      {isBlocked && <Icon name="lock-badge" className="blocked" />}
-      <i className="platform" />
 
       {contextActions && contextMenuAnchor !== undefined && (
         <Menu

@@ -172,6 +172,7 @@ function processDynamically(
   x += deltaX;
 
   const yWithTopShift = y + topShiftY;
+  console.log(rootRect, menuRect);
 
   if (isDense || (yWithTopShift + menuRect.height < rootRect.height + rootRect.top)) {
     positionY = 'top';

@@ -15,6 +15,7 @@ import {
   EFFECT_STICKERS_SET_ID,
   EMOJI_SIZE_PICKER,
   FAVORITE_SYMBOL_SET_ID,
+  FOLDER_SYMBOL_SET_ID,
   POPULAR_SYMBOL_SET_ID,
   RECENT_SYMBOL_SET_ID,
   STICKER_SIZE_PICKER,
@@ -241,7 +242,8 @@ const StickerSet: FC<OwnProps> = ({
 
   const canCut = !isInstalled && stickerSet.id !== RECENT_SYMBOL_SET_ID
     && stickerSet.id !== POPULAR_SYMBOL_SET_ID && stickerSet.id !== EFFECT_EMOJIS_SET_ID
-    && stickerSet.id !== EFFECT_STICKERS_SET_ID && !isChatEmojiSet && !isChatStickerSet;
+    && stickerSet.id !== EFFECT_STICKERS_SET_ID && !isChatEmojiSet && !isChatStickerSet
+    && stickerSet.id !== FOLDER_SYMBOL_SET_ID;
 
   const [isCut, , expand] = useFlag(canCut);
   const itemsBeforeCutout = itemsPerRow * 3 - 1;
@@ -383,7 +385,7 @@ const StickerSet: FC<OwnProps> = ({
                 canViewSet
                 noContextMenu={noContextMenus}
                 isCurrentUserPremium={isCurrentUserPremium}
-                shouldIgnorePremium={isChatEmojiSet}
+                shouldIgnorePremium={isChatEmojiSet || stickerSet.id === FOLDER_SYMBOL_SET_ID}
                 sharedCanvasRef={canvasRef}
                 withTranslucentThumb={isTranslucent}
                 onClick={onStickerSelect}

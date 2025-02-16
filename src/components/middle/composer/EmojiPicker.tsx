@@ -13,7 +13,7 @@ import type {
   EmojiRawData,
 } from '../../../util/emoji/emoji';
 
-import { MENU_TRANSITION_DURATION, RECENT_SYMBOL_SET_ID } from '../../../config';
+import { FOLDER_SYMBOL_SET_ID, MENU_TRANSITION_DURATION, RECENT_SYMBOL_SET_ID } from '../../../config';
 import animateHorizontalScroll from '../../../util/animateHorizontalScroll';
 import animateScroll from '../../../util/animateScroll';
 import buildClassName from '../../../util/buildClassName';
@@ -143,6 +143,7 @@ const EmojiPicker: FC<OwnProps & StateProps> = ({
     if (!categories) {
       return MEMO_EMPTY_ARRAY;
     }
+
     const themeCategories = [...categories];
     if (recentEmojis?.length) {
       themeCategories.unshift({
@@ -151,6 +152,10 @@ const EmojiPicker: FC<OwnProps & StateProps> = ({
         emojis: recentEmojis,
       });
     }
+
+    themeCategories.unshift({
+      emojis: getEnabledFolderIcons(), id: 'folder', name: 'folder',
+    });
 
     return themeCategories;
   }, [categories, lang, recentEmojis]);
@@ -237,32 +242,20 @@ const EmojiPicker: FC<OwnProps & StateProps> = ({
         onScroll={handleContentScroll}
         className={buildClassName('EmojiPicker-main', IS_TOUCH_ENV ? 'no-scrollbar' : 'custom-scroll')}
       >
-        <EmojiCategory
-          index={-1}
-          shouldRender
-          category={{ emojis: getEnabledFolderIcons(), id: 'folder', name: 'folder' }}
-          allEmojis={getEnabledFolderIcons().reduce<AllEmojis>((acc, v) => {
-            acc[v] = {
-              id: v,
-              image: '',
-              names: [v],
-              native: v,
-              src: getFolderIconSrcByEmoji(v),
-            };
-            return acc;
-          }, {})}
-          onEmojiSelect={handleEmojiSelect}
-        />
-        {allCategories.map((category, i) => (
-          <EmojiCategory
-            category={category}
-            index={i}
-            allEmojis={emojis}
-            observeIntersection={observeIntersection}
-            shouldRender={activeCategoryIndex >= i - 1 && activeCategoryIndex <= i + 1}
-            onEmojiSelect={handleEmojiSelect}
-          />
-        ))}
+        {allCategories.map((category, i) => {
+          const index = allCategories[0].id === FOLDER_SYMBOL_SET_ID ? i - 1 : i;
+
+          return (
+            <EmojiCategory
+              category={category}
+              index={index}
+              allEmojis={emojis}
+              observeIntersection={observeIntersection}
+              shouldRender={activeCategoryIndex >= index - 1 && activeCategoryIndex <= index + 1}
+              onEmojiSelect={handleEmojiSelect}
+            />
+          );
+        })}
       </div>
     </div>
   );

@@ -3,6 +3,8 @@ import React from '../../lib/teact/teactn';
 
 import type { ChatFoldersTabIcon } from '../common/hocs/withChatFoldersTabs';
 
+import buildClassName from '../../util/buildClassName';
+
 import { VerticalNavigationTab } from './VerticalNavigationTab';
 
 import styles from './VerticalNavigationTabs.module.scss';
@@ -21,7 +23,7 @@ export function VerticalNavigationTabs({
   tabs, activeTab, onSwitchTab, className, contextRootElementSelector, tabClassName, dropdown,
 }: OwnProps) {
   return (
-    <ul className={styles.verticalNavigationTabs}>
+    <ul className={buildClassName(styles.verticalNavigationTabs, 'component-theme-dark')}>
       {dropdown ? (
         <li className={styles.dropdown}>
           {dropdown}
@@ -32,6 +34,8 @@ export function VerticalNavigationTabs({
           title={item.title}
           icon={item.icon}
           badgeCount={item.badgeCount}
+          isBlocked={item.isBlocked}
+          contextRootElementSelector={contextRootElementSelector}
           isActive={activeTab === index}
           isBadgeActive={item.isBadgeActive}
           contextActions={item.contextActions}

@@ -1,0 +1,7 @@
+.form :global([data-type="code"]) {
+  background-color: var(--color-gray);
+}
+
+.form pre {
+  margin: 0;
+}
