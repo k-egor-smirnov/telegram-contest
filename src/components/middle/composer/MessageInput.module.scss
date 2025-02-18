@@ -1,7 +1,4 @@
-.form :global([data-type="MessageEntityCode"]) {
+:global([data-type="MessageEntityCode"]) {
   background-color: var(--color-gray);
-}
-
-.form pre {
   margin: 0;
 }

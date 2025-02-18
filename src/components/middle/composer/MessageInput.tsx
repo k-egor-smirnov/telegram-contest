@@ -27,6 +27,7 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
 import TextTimer from '../../ui/TextTimer';
+import MarkdownEditor from './MarkdownEditor';
 
 import styles from './MessageInput.module.scss';
 
@@ -51,6 +52,7 @@ const markersByType = {
   [ApiMessageEntityTypes.Italic]: '__',
   block: '',
   [ApiMessageEntityTypes.Code]: '```',
+  [ApiMessageEntityTypes.Blockquote]: '>',
 };
 
 function getPreviousNode(node) {
@@ -618,9 +620,9 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   }
 
   useEffect(() => {
-    inputRef.current.innerHTML = `${new MarkdownParser().parse(
-      'hello **bold** or __italic__ world __is__ good ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```',
-    ).html}`;
+    // inputRef.current.innerHTML = `${new MarkdownParser().parse(
+    //   'hello **bold** or __italic__ world __is__ good ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```\n> lol\nkek > lol\n>lol\n>kek',
+    // ).html}`;
 
     // setTimeout(() => {
     //   undo();
@@ -637,6 +639,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   }, []);
 
   function handleChange() {
+    return;
     // todo сканить сразу всю строку, потом оптимизировать
 
     const removeNodes = new Set();
@@ -812,6 +815,8 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 
   useEffect(() => {
     function selectNodes() {
+      return;
+
       const selection = document.getSelection();
 
       if (!selection?.rangeCount) {
@@ -870,7 +875,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         const startBlockNode = blockNodes?.[0]!;
         const endBlockNode = blockNodes.at(-1)!;
 
-        if (startBlockNode.firstChild!.classList.contains('marker')) {
+        if (startBlockNode.firstChild!.classList?.contains('marker')) {
           keepMarkers.add(startBlockNode.firstChild);
         } else {
           const markerNode = document.createElement('span');
@@ -980,6 +985,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         // onClick={!isAttachmentModalInput && !canSendPlainText ? handleClick : undefined}
       >
         <div className={inputScrollerContentClass}>
+          <MarkdownEditor />
           <div
             ref={inputRef}
             id={editableInputId || EDITABLE_INPUT_ID}
