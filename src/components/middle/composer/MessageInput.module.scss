@@ -1,4 +1,4 @@
-:global([data-type="MessageEntityCode"]) {
-  background-color: var(--color-gray);
+pre:global([data-type="MessageEntityCode"]) {
+  background-color: var(--color-code-bg);
   margin: 0;
 }

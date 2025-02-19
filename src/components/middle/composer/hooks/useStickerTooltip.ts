@@ -28,6 +28,7 @@ export default function useStickerTooltip(
 
   const getSingleEmoji = useDerivedSignal(() => {
     const html = getHtml();
+    return undefined;
     if (!isEnabled || !html || (IS_EMOJI_SUPPORTED && html.length > MAX_LENGTH)) return undefined;
 
     const hasEmoji = html.match(IS_EMOJI_SUPPORTED ? twemojiRegex : EMOJI_IMG_REGEX);

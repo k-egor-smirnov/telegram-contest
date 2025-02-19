@@ -1,5 +1,6 @@
 /* eslint-disable react/jsx-props-no-spreading */
 import { node } from 'webpack';
+import type { RefObject } from '../../../lib/teact/teact';
 import { useEffect, useRef, useState } from '../../../lib/teact/teact';
 import React from '../../../lib/teact/teactn';
 
@@ -12,6 +13,7 @@ import buildClassName from '../../../util/buildClassName';
 import useForceUpdate from '../../../hooks/useForceUpdate';
 
 import Blockquote from '../../common/Blockquote';
+import CodeBlock from '../../common/code/CodeBlock';
 
 function getNextNode(node) {
   if (node.firstChild) return node.firstChild;
@@ -74,7 +76,7 @@ function getNodesInRange(range: Range) {
     .filter(Boolean);
 }
 
-function Node({ selected, children, ...args }) {
+function BoldNode({ selected, children, ...args }) {
   return (
     <strong {...args}>
       {selected && <span className="marker">**</span>}
@@ -83,12 +85,85 @@ function Node({ selected, children, ...args }) {
     </strong>
   );
 }
+function ItalicNode({ selected, children, ...args }) {
+  return (
+    <i {...args}>
+      {selected && <span className="marker">__</span>}
+      {children}
+      {selected && <span className="marker">__</span>}
+    </i>
+  );
+}
 
-export default function MarkdownEditor() {
-  const ref = useRef<HTMLElement>();
+function CodeblockNode({
+  selected, children, node, ...args
+}: { node: TelegramObjectModelNode<any> }) {
+  if (!selected) {
+    return (
+      <div {...args} data-type={ApiMessageEntityTypes.Code} data-id={node.id}>
+        <CodeBlock language="js" text={node.children.map((n) => n.text).join('\n')} />
+      </div>
+    );
+  }
+
+  return (
+    <pre {...args} data-type={ApiMessageEntityTypes.Code} data-id={node.id}>
+      <div className="marker">{selected && '```'}js</div>
+      {node.children.map((child) => (
+        <div data-id={child.id} data-type="text">{child.text}</div>
+      ))}
+      <div className="marker">{selected && '```'}</div>
+    </pre>
+  );
+}
+
+function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; selectedIDsSet: RefObject<Set<string>> }) {
+  const args = {
+    'data-id': node.id,
+    'data-type': node.type,
+    key: node.id,
+  };
+
+  if (node.type === 'text') {
+    return <span {...args}>{node.text || '\u00A0'}</span>;
+  }
+
+  const inner = node.children.map((child) => <MDNode node={child} key={child.id} selectedIDsSet={selectedIDsSet} />);
+
+  // if (node.type === ApiMessageEntityTypes.Bold) {
+  //   console.log(node);
+  //   const unwrappedNode = tom!.makeNode('text', {});
+  //   unwrappedNode.text = `${node.marker}${node.children[0].text}${node.marker}`;
+
+  //   node.insertBefore(unwrappedNode);
+  //   node.remove();
+  // }
+
+  const isSelected = selectedIDsSet.current?.has(node.id);
+
+  switch (node.type) {
+    case ApiMessageEntityTypes.Bold: return <BoldNode selected={isSelected} {...args}>{inner}</BoldNode>;
+    case ApiMessageEntityTypes.Italic: return <ItalicNode selected={isSelected} {...args}>{inner}</ItalicNode>;
+    case 'block': return <div {...args} id={`md-block-${node.id}`} data-block>{inner}</div>;
+    case ApiMessageEntityTypes.Code:
+      return (
+        <CodeblockNode node={node} selected={isSelected} />
+      );
+    case ApiMessageEntityTypes.Blockquote:
+      return (
+        <Blockquote {...args} data-block>{inner}</Blockquote>
+      );
+    default: return inner ?? '';
+  }
+}
+
+export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
+  let inputRef = useRef<HTMLElement>();
   const forceUpdate = useForceUpdate();
 
   const selectedIDsSet = useRef<Set<string>>();
+
+  inputRef = ref ?? inputRef;
 
   // const prevSelection = useRef < []();
 
@@ -99,7 +174,7 @@ export default function MarkdownEditor() {
     selectedIDsSet.current = new Set();
 
     const newTom = (new MarkdownParser().parse(
-      'hello **bold** or __italic__ world __is__ good ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```\n> lol\nkek > lol\n>lol\n>kek',
+      'hello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\n ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```\n> lol\nkek > lol\n>lol\n>kek',
     ));
 
     let isUpdateQueued = false;
@@ -122,107 +197,216 @@ export default function MarkdownEditor() {
 
     setTom(newTom);
 
+    const nextMutationSafe = new Set<TelegramObjectModelNode<any>>();
+
     const observer = new MutationObserver((mutations) => {
-      console.log('mutations', mutations);
+      newTom.batchChange(() => {
+        console.log(mutations);
+        // console.log('mutations', mutations);
 
-      const nodesReplacements = new Map<TelegramObjectModelNode<any>, Array<TelegramObjectModelNode<any>>>();
+        const nodesReplacements = new Map<TelegramObjectModelNode<any>, Array<TelegramObjectModelNode<any>>>();
 
-      const modifiedMarkerNodeMutations = mutations
-        .filter((m) => m.type === 'characterData' && m.target.parentElement!.classList.contains('marker'));
+        const modifiedMarkerNodeMutations = mutations
+          .filter((m) => m.type === 'characterData' && m.target.parentElement!.classList.contains('marker'));
 
-      mutations = mutations.filter((mutation) => !modifiedMarkerNodeMutations.includes(mutation));
+        mutations = mutations.filter((mutation) => !modifiedMarkerNodeMutations.includes(mutation));
 
-      const safeNodes = new Set<TelegramObjectModelNode<any>>();
-      const deleteNodes = new Set<TelegramObjectModelNode<any>>();
+        const safeNodes = new Set<TelegramObjectModelNode<any>>();
+        const deleteNodeIds = new Set<string>();
 
-      for (const mutation of mutations) {
-        if (mutation.type === 'characterData') {
-          const parentNode = mutation.target.parentElement;
+        for (const mutation of mutations) {
+          if (mutation.type === 'characterData') {
+            const parentNode = mutation.target.parentElement;
 
-          if (parentNode?.classList.contains('marker')) {
-            continue;
-          } else {
-            const tomID = tomNode?.dataset.id;
-
-            // not working
-            setKeepSelection(document.getSelection()?.getRangeAt(0).cloneRange());
-
-            if (!tomID) {
-              console.log('not a tom text', tomNode, mutation);
-            }
-
-            const tomInstance = newTom.getNodeById(tomID);
-            if (tomInstance) {
-              tomInstance!.text = mutation.target.nodeValue;
+            if (parentNode?.classList.contains('marker')) {
+              continue;
             } else {
-              console.log('not found tom instance', mutation, mutation.target);
+              const tomID = parentNode?.dataset.id;
+              if (!tomID) {
+                console.log('not a tom node', tomID, parentNode);
+                continue;
+              }
+
+              // not working
+              setKeepSelection(document.getSelection()?.getRangeAt(0).cloneRange());
+
+              if (!tomID) {
+                console.log('not a tom text', tomNode, mutation);
+              }
+
+              const tomInstance = newTom.getNodeById(tomID);
+              if (tomInstance) {
+                tomInstance!.text = mutation.target.nodeValue;
+              } else {
+                console.log('not found tom instance', mutation, mutation.target);
+              }
+            }
+          } else if (mutation.type === 'childList') {
+            if (
+              mutation.previousSibling?.dataset?.type === 'block'
+            && mutation.previousSibling?.dataset?.id
+            && mutation.previousSibling?.dataset?.id === mutation.addedNodes?.[0]?.dataset?.id
+            ) {
+              console.log('ch', mutation);
+              const prevBlockEl = mutation.previousSibling! as HTMLElement;
+              const prevBlockNode = newTom.getNodeById(prevBlockEl.dataset.id)!;
+              if (!prevBlockNode.parent) {
+                console.warn('no parent?', prevBlockNode);
+                continue;
+              }
+
+              // register new line block with id from copy
+              const newBlockEl = mutation.addedNodes[0]! as HTMLElement;
+              const blockNode = newTom.makeNode('block');
+
+              // Придется перерегистрировать все ноды внутри
+              newBlockEl.querySelectorAll(['[data-type]']).forEach((el, i) => {
+                const existNode = newTom.getNodeById(el.dataset.id)!;
+
+                if (i === 0 && el.dataset.type === 'text') {
+                  const prevSpanEl = prevBlockEl.querySelector(`[data-id="${el.dataset.id}"]`) as HTMLElement;
+                  existNode.text = prevSpanEl.innerText;
+
+                  const newNode = newTom.makeNode('text', {});
+                  newNode.text = el.innerText;
+                  blockNode.pushNode(newNode);
+                } else {
+                  blockNode.pushNode(existNode);
+                }
+              });
+
+              newBlockEl.remove();
+
+              prevBlockNode.insertAfter(blockNode);
+              nextMutationSafe.add(blockNode);
+              nextMutationSafe.add(prevBlockNode);
+            }
+
+            for (const rNode of mutation.removedNodes) {
+              if (!rNode?.dataset?.id) {
+                continue;
+              }
+
+              const tomInstance = newTom.getNodeById(rNode.dataset.id);
+              if (tomInstance) {
+                deleteNodeIds.add(tomInstance.id);
+              }
+            }
+
+            for (const aNode of mutation.addedNodes) {
+              if (!aNode?.dataset?.id) {
+                continue;
+              }
+
+              const tomInstance = newTom.getNodeById(aNode.dataset.id);
+              const domParentId = aNode.parentElement?.dataset.id;
+
+              if (domParentId && domParentId !== tomInstance?.parent.id) {
+                // У TOM нод еще старый parent, надо это учитывать
+                const mutationTargetNode = newTom.getNodeById(mutation.target?.dataset?.id);
+                const mutationNextSiblingNode = newTom.getNodeById(mutation.nextSibling?.dataset?.id);
+                const mutationPrevSiblingNode = newTom.getNodeById(mutation.previousSibling?.dataset?.id);
+
+                // if (mutationPrevSiblingNode) {
+                //   mutationPrevSiblingNode.insertAfter(tomInstance);
+                //   console.log('after', tomInstance, tomInstance?.type, tomInstance.text, mutation.previousSibling);
+                // } else if (mutationNextSiblingNode) {
+                //   mutationNextSiblingNode.insertBefore(tomInstance);
+                //   console.log('before', tomInstance, tomInstance?.type, tomInstance.text);
+                // } else if (mutationTargetNode) {
+                //   mutationTargetNode.pushNode(tomInstance);
+                //   console.log('push', tomInstance, tomInstance?.type, tomInstance.text);
+                // }
+              }
+
+              if (deleteNodeIds.delete(tomInstance.id)) {
+              // continue;
+              }
             }
           }
-        } else if (mutation.type === 'childList') {
-          for (const rNode of mutation.removedNodes) {
-            if (!rNode?.dataset?.id) {
-              continue;
-            }
+        }
 
-            const tomInstance = newTom.getNodeById(rNode.dataset.id);
-            deleteNodes.add(tomInstance);
+        deleteNodeIds.forEach((id) => {
+          const n = newTom.getNodeById(id);
+
+          if (safeNodes.has(n) || !n) {
+            return;
           }
 
-          for (const aNode of mutation.addedNodes) {
-            if (!aNode?.dataset?.id) {
-              continue;
-            }
-
-            const tomInstance = newTom.getNodeById(aNode.dataset.id);
-            safeNodes.add(tomInstance);
+          if (nextMutationSafe.has(n)) {
+            console.log('safe', n);
+            nextMutationSafe.delete(n);
+            return;
           }
+
+          console.log('remove', n.type, n);
+
+          n.remove();
+        });
+
+        // first delete inner contents then modify markers
+        for (const mutation of modifiedMarkerNodeMutations) {
+          const markerEl = mutation.target.parentElement;
+
+          const tomNode = mutation.target.parentElement?.closest('[data-type]') as HTMLElement;
+          const tomInstance = newTom.getNodeById(tomNode?.dataset.id)!;
+          if (!tomInstance) {
+            console.log('not found tom instance for', tomNode);
+            continue;
+          }
+
+          if (!nodesReplacements.has(tomInstance)) {
+            if (tomInstance.type === ApiMessageEntityTypes.Code) {
+              nodesReplacements.set(tomInstance, [...tomInstance.children.map((v) => {
+                const blockNode = newTom.makeNode('block');
+                const textNode = newTom.makeNode('text');
+                textNode.text = v.text;
+                blockNode.pushNode(textNode);
+
+                return blockNode;
+              })]);
+            } else {
+              nodesReplacements.set(tomInstance, [...tomInstance.children]);
+            }
+          }
+
+          const value = [...nodesReplacements.get(tomInstance)!];
+
+          if (tomNode.firstChild === markerEl) {
+            console.log('first marker', markerEl?.innerText);
+            const textNode = newTom.makeNode('text', {});
+            textNode.text = mutation.target.textContent!;
+            if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
+              const blockNode = newTom.makeNode('block', {});
+              blockNode.pushNode(textNode);
+              value.unshift(blockNode);
+            } else {
+              value.unshift(textNode);
+            }
+          } else if (tomNode.lastChild === markerEl) {
+            console.log('last marker', markerEl?.innerText);
+            const textNode = newTom.makeNode('text', {});
+            textNode.text = mutation.target.textContent!;
+            if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
+              const blockNode = newTom.makeNode('block', {});
+              blockNode.pushNode(textNode);
+              value.push(blockNode);
+            } else {
+              value.push(textNode);
+            }
+          }
+
+          console.log('set', value);
+          nodesReplacements.set(tomInstance, value);
         }
-      }
 
-      console.log('del', deleteNodes);
-      console.log('safe', safeNodes);
+        // TODO мб перенести контроль удаления маркеров в сам компонент ноды?
 
-      deleteNodes.forEach((n) => {
-        if (safeNodes.has(n) || !n) {
-          return;
-        }
-
-        n.remove();
-      });
-
-      // first delete inner contents then modify markers
-      for (const mutation of modifiedMarkerNodeMutations) {
-        const markerEl = mutation.target.parentElement;
-
-        const tomNode = mutation.target.parentElement?.closest('[data-type]') as HTMLElement;
-        const tomInstance = newTom.getNodeById(tomNode?.dataset.id)!;
-
-        if (!nodesReplacements.has(tomInstance)) {
-          nodesReplacements.set(tomInstance, [...tomInstance.children]);
-        }
-
-        const value = [...nodesReplacements.get(tomInstance)!];
-
-        if (tomNode.firstChild === markerEl) {
-          const markerInstance = newTom.makeNode('text', {});
-          markerInstance.text = mutation.target.textContent!;
-          value.unshift(markerInstance);
-        } else if (tomNode.lastChild === markerEl) {
-          const markerInstance = newTom.makeNode('text', {});
-          markerInstance.text = mutation.target.textContent!;
-          value.push(markerInstance);
-        }
-
-        console.log('set', value);
-        nodesReplacements.set(tomInstance, value);
-      }
-
-      // TODO мб перенести контроль удаления маркеров в сам компонент ноды?
-
-      nodesReplacements.forEach((replacements, n) => {
-        console.log('insert', ...replacements, 'before', n);
-        n.insertBefore(...replacements);
-        n.remove();
+        nodesReplacements.forEach((replacements, n) => {
+          console.log('insert', ...replacements, 'before', n);
+          n.insertBefore(...replacements.filter((v) => v));
+          n.remove();
+        });
       });
     });
 
@@ -240,12 +424,12 @@ export default function MarkdownEditor() {
         return;
       }
 
-      selectedIDsSet.current!.clear();
+      selectedIDsSet.current?.clear();
 
       getNodesInRange(selection?.getRangeAt(0))
         .filter((v) => v.dataset?.type)
         .forEach((el: HTMLElement) => {
-          selectedIDsSet.current!.add(el.dataset.id);
+          selectedIDsSet.current?.add(el.dataset.id);
         });
 
       if (selection.isCollapsed) {
@@ -273,53 +457,29 @@ export default function MarkdownEditor() {
   //   setKeepSelection(undefined);
   // }, [keepSelection]);
 
-  function renderNode(node: TelegramObjectModelNode<any>) {
-    const args = {
-      'data-id': node.id,
-      'data-type': node.type,
-      key: node.id,
-      teactOrderKey: node.id,
-    };
-
-    if (node.type === 'text') {
-      return <span {...args}>{node.text}</span>;
+  useEffect(() => {
+    if (tom) {
+      onUpdate(tom?.apiText);
     }
+    console.log(tom?.apiText);
 
-    const inner = node.children.map((child) => renderNode(child));
+    const unsub = tom?.onChange(() => {
+      onUpdate(tom.apiText);
+    });
 
-    // if (node.type === ApiMessageEntityTypes.Bold) {
-    //   console.log(node);
-    //   const unwrappedNode = tom!.makeNode('text', {});
-    //   unwrappedNode.text = `${node.marker}${node.children[0].text}${node.marker}`;
+    return () => unsub?.();
+  }, [tom]);
 
-    //   node.insertBefore(unwrappedNode);
-    //   node.remove();
-    // }
-
-    switch (node.type) {
-      case 'text': return <span {...args}>{node.text ?? ''}</span>;
-      case ApiMessageEntityTypes.Bold: return <Node selected={selectedIDsSet.current?.has(node.id)} {...args}>{inner}</Node>;
-      case ApiMessageEntityTypes.Italic: return <i {...args}>{inner}</i>;
-      case 'block': return <div {...args} data-block>{inner}</div>;
-      case ApiMessageEntityTypes.Code:
-        return (
-          <pre {...args} data-block className={buildClassName(node.attrs.isStart && 'code-block-start')}>
-            {inner}
-          </pre>
-        );
-      case ApiMessageEntityTypes.Blockquote:
-        return (
-          <Blockquote {...args} data-block>{inner}</Blockquote>
-        );
-      default: return inner ?? '';
-    }
-  }
+  console.log(tom?.root);
 
   return (
-    <div contentEditable ref={(el) => ref.current = el}>
-      {tom?.children.map((node) => {
-        return renderNode(node);
-      })}
-    </div>
+    <>
+      <div dangerouslySetInnerHTML={{ __html: tom?.html }} style="position: fixed; top: 0; right: 0; transform: scale(0.3); transform-origin: top right;" />
+      <div {...restProps} contentEditable ref={(el) => inputRef.current = el}>
+        {tom?.root.children.map((node) => {
+          return <MDNode key={node.id} node={node} selectedIDsSet={selectedIDsSet} />;
+        })}
+      </div>
+    </>
   );
 }

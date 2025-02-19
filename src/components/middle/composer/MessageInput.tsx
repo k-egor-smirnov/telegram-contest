@@ -5,10 +5,11 @@ import React, {
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
+import type { ApiFormattedText, ApiInputMessageReplyInfo } from '../../../api/types';
 import type { AnyNode, TelegramObjectModel } from '../../../lib/MarkdownParser';
 import type { ISettings, ThreadId } from '../../../types';
 import type { Signal } from '../../../util/signals';
-import { type ApiInputMessageReplyInfo, ApiMessageEntityTypes } from '../../../api/types';
+import { ApiMessageEntityTypes } from '../../../api/types';
 
 import { EDITABLE_INPUT_ID } from '../../../config';
 import { MarkdownParser } from '../../../lib/MarkdownParser';
@@ -61,18 +62,6 @@ function getPreviousNode(node) {
     if (node.previousSibling) return node.previousSibling;
     node = node.parentNode;
   }
-}
-
-function getNodesBetween(start: HTMLElement, end: HTMLElement) {
-  const nodes = new Set<Node>();
-  let node = start;
-
-  while (node && node !== end) {
-    nodes.add(node);
-    node = getNextNode(node);
-  }
-
-  return [...nodes];
 }
 
 function getBlockNodes(el: HTMLElement) {
@@ -178,7 +167,7 @@ type OwnProps = {
   editableInputId?: string;
   isReady: boolean;
   isActive: boolean;
-  getHtml: Signal<string>;
+  getApiText: Signal<string>;
   placeholder: string;
   timedPlaceholderLangKey?: string;
   timedPlaceholderDate?: number;
@@ -188,7 +177,7 @@ type OwnProps = {
   shouldSuppressFocus?: boolean;
   shouldSuppressTextFormatter?: boolean;
   canSendPlainText?: boolean;
-  onUpdate: (html: string) => void;
+  onUpdate: (text: ApiFormattedText) => void;
   onSuppressedFocus?: () => void;
   onSend: () => void;
   onScroll?: (event: React.UIEvent<HTMLElement>) => void;
@@ -205,33 +194,6 @@ type StateProps = {
   canPlayAnimatedEmojis: boolean;
 };
 
-function clearSelection() {
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-
-  if (selection.removeAllRanges) {
-    selection.removeAllRanges();
-  } else if (selection.empty) {
-    selection.empty();
-  }
-}
-
-function getTypedNodeFromSelection() {
-  const focusNode = document.getSelection()?.focusNode as HTMLElement;
-  if (!focusNode) {
-    return undefined;
-  }
-  const focusNodeElement: HTMLElement | null = focusNode.nodeType === 3 ? focusNode.parentElement : focusNode;
-
-  const closestTypedNode = focusNodeElement?.dataset?.id
-    ? focusNodeElement
-    : (focusNodeElement?.closest?.('[data-id]:not(span)') as HTMLElement);
-
-  return closestTypedNode;
-}
-
 const MessageInput: FC<OwnProps & StateProps> = ({
   ref,
   id,
@@ -243,7 +205,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   editableInputId,
   isReady,
   isActive,
-  getHtml,
+  getApiText,
   placeholder,
   timedPlaceholderLangKey,
   timedPlaceholderDate,
@@ -345,7 +307,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   });
 
   // useInputCustomEmojis(
-  //   getHtml,
+  //   getApiText,
   //   inputRef,
   //   sharedCanvasRef,
   //   sharedCanvasHqRef,
@@ -397,9 +359,9 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   //   updateInputHeight(false);
   // }, [isAttachmentModalInput, updateInputHeight]);
 
-  // const htmlRef = useRef(getHtml());
+  // const htmlRef = useRef(getApiText());
   // useLayoutEffect(() => {
-  //   const html = isActive ? getHtml() : '';
+  //   const html = isActive ? getApiText() : '';
 
   //   if (html !== inputRef.current!.innerHTML) {
   //     // inputRef.current!.innerHTML = html;
@@ -414,7 +376,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 
   //     updateInputHeight(!html);
   //   }
-  // }, [getHtml, isActive, updateInputHeight]);
+  // }, [getApiText, isActive, updateInputHeight]);
 
   // const chatIdRef = useRef(chatId);
   // chatIdRef.current = chatId;
@@ -540,7 +502,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   //   // https://levelup.gitconnected.com/javascript-events-handlers-keyboard-and-load-events-1b3e46a6b0c3#1960
   //   const { isComposing } = e;
 
-  //   const html = getHtml();
+  //   const html = getApiText();
   //   if (!isComposing && !html && (e.metaKey || e.ctrlKey)) {
   //     const targetIndexDelta = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : undefined;
   //     if (targetIndexDelta) {
@@ -572,230 +534,52 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   //   }
   // }
 
-  function undo() {
-    const commit = commits.current[commits.current.length - 1 + commitsOffset.current];
-    console.log('commit', commit, inputRef.current);
-    if (!commit) {
-      console.log('no undo');
-      return;
-    }
+  // function undo() {
+  //   const commit = commits.current[commits.current.length - 1 + commitsOffset.current];
+  //   console.log('commit', commit, inputRef.current);
+  //   if (!commit) {
+  //     console.log('no undo');
+  //     return;
+  //   }
 
-    switch (commit.type) {
-      case 'addNode':
-        console.log('remove', inputRef.current.childNodes[commit.pos]);
-        inputRef.current.childNodes[commit.pos].remove();
-    }
+  //   switch (commit.type) {
+  //     case 'addNode':
+  //       console.log('remove', inputRef.current.childNodes[commit.pos]);
+  //       inputRef.current.childNodes[commit.pos].remove();
+  //   }
 
-    commitsOffset.current--;
-  }
+  //   commitsOffset.current--;
+  // }
 
-  function redo() {
-    const commit = commits.current[commits.current.length - 1 + commitsOffset.current + 1];
+  // function redo() {
+  //   const commit = commits.current[commits.current.length - 1 + commitsOffset.current + 1];
 
-    console.log('redo', commit);
-    switch (commit.type) {
-      case 'addNode': {
-        const element = document.createElement('span');
-        element.dataset.type = commit.nodeType;
-        element.innerText = commit.value;
+  //   console.log('redo', commit);
+  //   switch (commit.type) {
+  //     case 'addNode': {
+  //       const element = document.createElement('span');
+  //       element.dataset.type = commit.nodeType;
+  //       element.innerText = commit.value;
 
-        // don't parse markdown here cause it's a new commit
+  //       // don't parse markdown here cause it's a new commit
 
-        const posNode = inputRef.current!.childNodes[commit.pos];
+  //       const posNode = inputRef.current!.childNodes[commit.pos];
 
-        if (commit.dir === 1) {
-          inputRef.current!.insertBefore(element, posNode);
-        } else if (posNode) {
-          console.log(posNode);
-          posNode.parentElement!.insertBefore(element, posNode.nextSibling);
-        } else {
-          inputRef.current!.after(element);
-        }
+  //       if (commit.dir === 1) {
+  //         inputRef.current!.insertBefore(element, posNode);
+  //       } else if (posNode) {
+  //         console.log(posNode);
+  //         posNode.parentElement!.insertBefore(element, posNode.nextSibling);
+  //       } else {
+  //         inputRef.current!.after(element);
+  //       }
 
-        break;
-      }
-    }
+  //       break;
+  //     }
+  //   }
 
-    commitsOffset.current++;
-  }
-
-  useEffect(() => {
-    // inputRef.current.innerHTML = `${new MarkdownParser().parse(
-    //   'hello **bold** or __italic__ world __is__ good ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```\n> lol\nkek > lol\n>lol\n>kek',
-    // ).html}`;
-
-    // setTimeout(() => {
-    //   undo();
-    // }, 500);
-    // setTimeout(() => {
-    //   undo();
-    // }, 1000);
-    // setTimeout(() => {
-    //   redo();
-    // }, 1500);
-    // setTimeout(() => {
-    //   redo();
-    // }, 2000);
-  }, []);
-
-  function handleChange() {
-    return;
-    // todo сканить сразу всю строку, потом оптимизировать
-
-    const removeNodes = new Set();
-
-    const tasks = [];
-
-    function checkStack(targetNode, textStack) {
-      if (!textStack[0]) {
-        return;
-      }
-
-      const result = new MarkdownParser().parse(textStack[0]);
-      const fakeNode = document.createElement('div');
-      fakeNode.innerHTML = result.html;
-
-      [...fakeNode.children[0].children].forEach((fakeNodeChildren) => {
-        targetNode.parentElement.insertBefore(fakeNodeChildren, targetNode);
-      });
-
-      [...textStack[1]].forEach((n) => {
-        tasks.push(() => n.remove());
-      });
-
-      textStack[0] = '';
-      textStack[1] = [];
-    }
-
-    for (const div of inputRef.current?.childNodes) {
-      const textStack = ['', []];
-
-      for (const mdNode of div.childNodes) {
-        if (mdNode?.nodeType === 3) {
-          textStack[0] += mdNode.textContent;
-          textStack[1].push(mdNode);
-          continue;
-        } else if (mdNode?.dataset.type === 'text') {
-          textStack[0] += mdNode.innerText;
-          textStack[1].push(mdNode);
-        } else {
-          checkStack(mdNode, textStack);
-        }
-
-        // if (mdNode.dataset?.type === 'text' && [...mdNode.parentElement?.querySelectorAll('[data-type]')].length === 1) {
-        //   mdNode = mdNode.parentElement;
-        // }
-
-        // if (mdNode?.dataset?.type === 'text') {
-        //   const result = new MarkdownParser().parse(mdNode.textContent);
-        //   const fakeNode = document.createElement('div');
-        //   fakeNode.innerHTML = result.html;
-
-        //   if (fakeNode.children.length > 1) {
-        //     [...fakeNode.children].forEach((fakeNodeChildren) => {
-        //       mdNode.parentElement.insertBefore(fakeNodeChildren, mdNode);
-        //     });
-        //     mdNode.remove();
-        //   } else if (fakeNode.children[0]?.dataset.type !== 'text') {
-        //     console.log('not text');
-        //   }
-        // }
-
-        if (
-          !(mdNode instanceof HTMLElement)
-          || mdNode.dataset?.type === 'text'
-        ) {
-          continue;
-        }
-
-        const markerTemplate = markersByType[mdNode.dataset.type!];
-
-        const markerBefore = mdNode.querySelector('.marker:first-child');
-        const markerAfter = mdNode.querySelector('.marker:last-child');
-
-        if (!markerBefore && !markerAfter) {
-          // not selected
-          continue;
-        }
-
-        const isBeforeInvalid = markerBefore?.textContent !== markerTemplate
-          || !markerBefore
-          || markerBefore === markerAfter;
-        let isAfterInvalid = markerAfter?.textContent !== markerTemplate
-          || !markerAfter
-          || markerAfter === markerBefore;
-
-        if (isAfterInvalid && markerAfter?.textContent?.startsWith(markerTemplate)) {
-          const [_, otherContent] = markerAfter?.textContent.split(markerTemplate);
-          // TODO only allowed symbols from docs
-          if (otherContent === ' '.repeat(otherContent.length) || otherContent === ' '.repeat(otherContent.length)) {
-            const newNode = document.createElement('span');
-            newNode.dataset.type = 'text';
-            newNode.innerText = otherContent;
-            markerAfter.parentElement.parentElement.insertBefore(newNode, markerAfter.parentElement.nextSibling);
-            isAfterInvalid = false;
-            markerAfter.innerText = markerTemplate;
-
-            const range = document.createRange();
-            range.setStart(newNode, otherContent.length);
-            range.setEnd(newNode, otherContent.length);
-
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-          }
-        }
-
-        if (isBeforeInvalid || isAfterInvalid) {
-          const backup = {
-            before: null,
-            content: null,
-            after: null,
-          };
-
-          // Если внутри ноды других типов, поднимаем их на уровень выше
-
-          for (const child of mdNode.childNodes) {
-            if (child === markerBefore) {
-              const newNode = document.createTextNode(markerBefore.textContent);
-              newNode.backup = backup;
-              backup.before = child;
-              mdNode.parentElement?.insertBefore(newNode, mdNode);
-              continue;
-            }
-
-            if (child.dataset?.type === 'text') {
-              const newNode = document.createTextNode(child.textContent);
-              newNode.backup = backup;
-              backup.content = child;
-              mdNode.parentElement?.insertBefore(newNode, mdNode);
-              continue;
-            } else if (child.dataset?.type) {
-              mdNode.parentElement?.insertBefore(child, mdNode);
-              backup.content = child;
-              continue;
-            }
-
-            if (child === markerAfter) {
-              const newNode = document.createTextNode(markerAfter.textContent);
-              newNode.backup = backup;
-              backup.after = child;
-              mdNode.parentElement?.insertBefore(newNode, mdNode);
-              continue;
-            }
-          }
-
-          mdNode.remove();
-
-          // мб сохранять бэкап чилдренов в объект, а потом восстанавливать?
-        }
-      }
-
-      checkStack(div.childNodes[div.childNodes.length - 1], textStack);
-    }
-
-    tasks.forEach((cb) => cb());
-  }
+  //   commitsOffset.current++;
+  // }
 
   useEffect(() => {
     const input = inputRef.current!;
@@ -813,152 +597,9 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     };
   }, [shouldSuppressFocus]);
 
-  useEffect(() => {
-    function selectNodes() {
-      return;
-
-      const selection = document.getSelection();
-
-      if (!selection?.rangeCount) {
-        return;
-      }
-
-      const allMarkers = inputRef.current?.querySelectorAll('.marker');
-      const keepMarkers = new Set<HTMLElement>();
-
-      const selectedBlockNodes = new Set<HTMLElement>();
-
-      getNodesInRange(selection?.getRangeAt(0))
-        .filter((v) => v.dataset?.type)
-        .forEach((el: HTMLElement) => {
-          const { type, block } = el.dataset;
-
-          if (block === '') {
-            selectedBlockNodes.add(el);
-          }
-
-          if (!type || type === 'text' || type === ApiMessageEntityTypes.Code) {
-            return;
-          }
-
-          const marker = markersByType[type] ?? '??';
-
-          if (el.firstChild?.classList.contains('marker')) {
-            keepMarkers.add(el.firstChild as HTMLElement);
-          } else {
-            const leftMarkerNode = document.createElement('span');
-            leftMarkerNode.className = 'marker';
-            leftMarkerNode.innerHTML = marker;
-            el?.insertBefore(leftMarkerNode, el.firstChild);
-          }
-
-          if (el.lastChild?.classList.contains('marker')) {
-            keepMarkers.add(el.lastChild as HTMLElement);
-          } else {
-            const rightMarkerNode = document.createElement('span');
-            rightMarkerNode.className = 'marker';
-            rightMarkerNode.innerHTML = marker;
-            el?.appendChild(rightMarkerNode);
-          }
-        });
-
-      const keepCodeBlockStartNodes = new Set<HTMLElement>();
-      const codeBlocksStartNodes = inputRef.current?.querySelectorAll(`[data-type=${[ApiMessageEntityTypes.Code]}]`)
-      ?? [];
-
-      selectedBlockNodes.forEach((v) => {
-        const blockNodes = getBlockNodes(v);
-        if (!blockNodes?.[0]) {
-          return;
-        }
-
-        const startBlockNode = blockNodes?.[0]!;
-        const endBlockNode = blockNodes.at(-1)!;
-
-        if (startBlockNode.firstChild!.classList?.contains('marker')) {
-          keepMarkers.add(startBlockNode.firstChild);
-        } else {
-          const markerNode = document.createElement('span');
-          markerNode.className = 'marker';
-          markerNode.innerHTML = '```';
-          startBlockNode?.insertBefore(markerNode, startBlockNode.firstChild);
-        }
-
-        if (endBlockNode.firstChild!.classList.contains('marker')) {
-          keepMarkers.add(endBlockNode.firstChild);
-        } else {
-          const markerNode = document.createElement('span');
-          markerNode.className = 'marker';
-          markerNode.innerHTML = '```';
-          endBlockNode?.insertBefore(markerNode, endBlockNode.firstChild);
-        }
-
-        // const marker = markersByType[type] ?? '??';
-
-        blockNodes[0].classList?.add('code-block-selected');
-        keepCodeBlockStartNodes.add(blockNodes[0]);
-        // keepMarkers.add(marker);
-      });
-
-      codeBlocksStartNodes.forEach((startNode) => {
-        if (!keepCodeBlockStartNodes.has(startNode)) {
-          startNode.classList?.remove('code-block-selected');
-        }
-      });
-
-      allMarkers?.forEach((markerEl) => {
-        if (!keepMarkers.has(markerEl)) {
-          markerEl.remove();
-        }
-      });
-    }
-
-    function handleSelectionChange() {
-      if (!document.getSelection()?.rangeCount) {
-        return;
-      }
-
-      const selection = document.getSelection();
-
-      prevSelectionNodes.current = getNodesAroundRange(
-        document.getSelection()?.getRangeAt(0),
-      );
-
-      // const closestMdNode = getTypedNodeFromSelection();
-      // prevCaretPos.
-
-      if (mouseLockedRef.current) {
-        return;
-      }
-
-      selectNodes();
-    }
-
-    function handleMouseUp() {
-      mouseLockedRef.current = false;
-      selectNodes();
-    }
-
-    function handleMouseDown() {
-      mouseLockedRef.current = true;
-    }
-
-    document.addEventListener('selectionchange', handleSelectionChange);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mousedown', handleMouseDown);
-
-    onUpdate('test **a** lol');
-
-    return () => {
-      document.removeEventListener('selectionchange', handleSelectionChange);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('mousedown', handleMouseDown);
-    };
-  }, []);
-
   const isTouched = useDerivedState(
-    () => Boolean(isActive && getHtml()),
-    [isActive, getHtml],
+    () => Boolean(isActive && getApiText()),
+    [isActive, getApiText],
   );
 
   const className = buildClassName(
@@ -985,24 +626,16 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         // onClick={!isAttachmentModalInput && !canSendPlainText ? handleClick : undefined}
       >
         <div className={inputScrollerContentClass}>
-          <MarkdownEditor />
-          <div
-            ref={inputRef}
-            id={editableInputId || EDITABLE_INPUT_ID}
+          <MarkdownEditor
+            ref={ref}
             className={className}
-            contentEditable={isAttachmentModalInput || canSendPlainText}
-            role="textbox"
-            dir="auto"
-            tabIndex={0}
-            // onClick={focusInput}
-            onChange={handleChange}
-            // onKeyDown={handleKeyDown}
-            // onMouseDown={handleMouseDown}
-            // onContextMenu={IS_ANDROID ? handleAndroidContextMenu : undefined}
-            // onTouchCancel={IS_ANDROID ? processSelectionWithTimeout : undefined}
             aria-label={placeholder}
             onFocus={!isNeedPremium ? onFocus : undefined}
             onBlur={!isNeedPremium ? onBlur : undefined}
+            role="textbox"
+            dir="auto"
+            onUpdate={onUpdate}
+            tabIndex={0}
           />
           {!forcedPlaceholder && (
             <span

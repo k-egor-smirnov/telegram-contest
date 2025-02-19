@@ -422,7 +422,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   // eslint-disable-next-line no-null/no-null
   const storyReactionRef = useRef<HTMLButtonElement>(null);
 
-  const [getHtml, setHtml] = useSignal('');
+  const [getApiText, setApiText] = useSignal<ApiFormattedText>({ text: '', entities: [] });
   const [isMounted, setIsMounted] = useState(false);
   const getSelectionRange = useGetSelectionRange(editableInputCssSelector);
   const lastMessageSendTimeSeconds = useRef<number>();
@@ -447,7 +447,7 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   const isSentStoryReactionHeart = sentStoryReaction && isSameReaction(sentStoryReaction, HEART_REACTION);
 
-  useEffect(processMessageInputForCustomEmoji, [getHtml]);
+  useEffect(processMessageInputForCustomEmoji, [getApiText]);
 
   const customEmojiNotificationNumber = useRef(0);
 
@@ -532,7 +532,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       }
     }
 
-    setHtml(`${getHtml()}${newHtml}`);
+    setApiText(`${getApiText()}${newHtml}`);
 
     // If selection is outside of input, set cursor at the end of input
     requestNextMutation(() => {
@@ -577,7 +577,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     handleSetAttachments,
   } = useAttachmentModal({
     attachments,
-    setHtml,
+    setApiText,
     setAttachments,
     fileSizeLimit,
     chatId,
@@ -623,10 +623,10 @@ const Composer: FC<OwnProps & StateProps> = ({
   const isEditingRef = useStateRef(Boolean(editingMessage));
   useEffect(() => {
     if (!isForCurrentMessageList || isInStoryViewer) return;
-    if (getHtml() && !isEditingRef.current) {
+    if (getApiText() && !isEditingRef.current) {
       sendMessageAction({ type: 'typing' });
     }
-  }, [getHtml, isEditingRef, isForCurrentMessageList, isInStoryViewer, sendMessageAction]);
+  }, [getApiText, isEditingRef, isForCurrentMessageList, isInStoryViewer, sendMessageAction]);
 
   const isAdmin = chat && isChatAdmin(chat);
 
@@ -639,8 +639,8 @@ const Composer: FC<OwnProps & StateProps> = ({
   } = useEmojiTooltip(
     Boolean(isReady && isOnActiveTab && (isInStoryViewer || isForCurrentMessageList)
       && shouldSuggestStickers && !hasAttachments),
-    getHtml,
-    setHtml,
+    getApiText,
+    setApiText,
     undefined,
     recentEmojis,
     baseEmojiKeywords,
@@ -654,8 +654,8 @@ const Composer: FC<OwnProps & StateProps> = ({
   } = useCustomEmojiTooltip(
     Boolean(isReady && isOnActiveTab && (isInStoryViewer || isForCurrentMessageList)
       && shouldSuggestCustomEmoji && !hasAttachments),
-    getHtml,
-    setHtml,
+    getApiText,
+    setApiText,
     getSelectionRange,
     inputRef,
     customEmojiForEmoji,
@@ -671,7 +671,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       && shouldSuggestStickers
       && canSendStickers
       && !hasAttachments),
-    getHtml,
+    getApiText,
     stickersForEmoji,
   );
 
@@ -682,8 +682,8 @@ const Composer: FC<OwnProps & StateProps> = ({
     mentionFilteredUsers,
   } = useMentionTooltip(
     Boolean(isInMessageList && isReady && isForCurrentMessageList && !hasAttachments),
-    getHtml,
-    setHtml,
+    getApiText,
+    setApiText,
     getSelectionRange,
     inputRef,
     groupChatMembers,
@@ -704,7 +704,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   } = useInlineBotTooltip(
     Boolean(isInMessageList && isReady && isForCurrentMessageList && !hasAttachments),
     chatId,
-    getHtml,
+    getApiText,
     inlineBots,
   );
 
@@ -720,7 +720,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       && isReady
       && isForCurrentMessageList
       && ((botCommands && botCommands?.length) || chatBotCommands?.length || (hasQuickReplies && canSendQuickReplies))),
-    getHtml,
+    getApiText,
     botCommands,
     chatBotCommands,
     canSendQuickReplies ? quickReplies : undefined,
@@ -730,15 +730,15 @@ const Composer: FC<OwnProps & StateProps> = ({
     draft,
     chatId,
     threadId,
-    getHtml,
-    setHtml,
+    getApiText,
+    setApiText,
     editedMessage: editingMessage,
     isDisabled: isInStoryViewer || Boolean(requestedDraft),
   });
 
   const resetComposer = useLastCallback((shouldPreserveInput = false) => {
     if (!shouldPreserveInput) {
-      setHtml('');
+      setApiText('');
     }
 
     setAttachments(MEMO_EMPTY_ARRAY);
@@ -758,8 +758,8 @@ const Composer: FC<OwnProps & StateProps> = ({
   });
 
   const [handleEditComplete, handleEditCancel, shouldForceShowEditing] = useEditing(
-    getHtml,
-    setHtml,
+    getApiText,
+    setApiText,
     editingMessage,
     resetComposer,
     chatId,
@@ -806,7 +806,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   });
 
   const mainButtonState = useDerivedState(() => {
-    if (!isInputHasFocus && onForward && !(getHtml() && !hasAttachments)) {
+    if (!isInputHasFocus && onForward && !(getApiText() && !hasAttachments)) {
       return MainButtonState.Forward;
     }
 
@@ -814,7 +814,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       return MainButtonState.Edit;
     }
 
-    if (IS_VOICE_RECORDING_SUPPORTED && !activeVoiceRecording && !isForwarding && !(getHtml() && !hasAttachments)) {
+    if (IS_VOICE_RECORDING_SUPPORTED && !activeVoiceRecording && !isForwarding && !(getApiText() && !hasAttachments)) {
       return MainButtonState.Record;
     }
 
@@ -824,7 +824,7 @@ const Composer: FC<OwnProps & StateProps> = ({
 
     return MainButtonState.Send;
   }, [
-    activeVoiceRecording, editingMessage, getHtml, hasAttachments, isForwarding, isInputHasFocus, onForward,
+    activeVoiceRecording, editingMessage, getApiText, hasAttachments, isForwarding, isInputHasFocus, onForward,
     shouldForceShowEditing, isInScheduledList,
   ]);
   const canShowCustomSendMenu = !isInScheduledList;
@@ -943,7 +943,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       return;
     }
 
-    const { text, entities } = parseHtmlAsFormattedText(getHtml());
+    const { text, entities } = parseHtmlAsFormattedText(getApiText());
     if (!text && !attachmentsToSend.length) {
       return;
     }
@@ -1033,7 +1033,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       }
     }
 
-    const { text, entities } = parseHtmlAsFormattedText(getHtml());
+    const { text, entities } = getApiText();
 
     if (currentAttachments.length) {
       sendAttachments({
@@ -1168,7 +1168,7 @@ const Composer: FC<OwnProps & StateProps> = ({
         focusEditableElement(messageInput, true);
       });
     }
-  }, [editableInputId, requestedDraft, resetOpenChatWithDraft, setHtml]);
+  }, [editableInputId, requestedDraft, resetOpenChatWithDraft, setApiText]);
 
   useEffect(() => {
     if (requestedDraftFiles?.length) {
@@ -1345,8 +1345,8 @@ const Composer: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     if (!isComposerBlocked) return;
 
-    setHtml('');
-  }, [isComposerBlocked, setHtml, attachments]);
+    setApiText('');
+  }, [isComposerBlocked, setApiText, attachments]);
 
   const insertTextAndUpdateCursorAttachmentModal = useLastCallback((text: string) => {
     insertTextAndUpdateCursor(text, EDITABLE_INPUT_MODAL_ID);
@@ -1363,7 +1363,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       }
     }
 
-    setHtml(deleteLastCharacterOutsideSelection(getHtml()));
+    setApiText(deleteLastCharacterOutsideSelection(getApiText()));
   });
 
   const removeSymbolAttachmentModal = useLastCallback(() => {
@@ -1396,8 +1396,8 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   const withBotMenuButton = isChatWithBot && botMenuButton?.type === 'webApp' && !editingMessage;
   const isBotMenuButtonOpen = useDerivedState(() => {
-    return withBotMenuButton && !getHtml() && !activeVoiceRecording;
-  }, [withBotMenuButton, getHtml, activeVoiceRecording]);
+    return withBotMenuButton && !getApiText() && !activeVoiceRecording;
+  }, [withBotMenuButton, getApiText, activeVoiceRecording]);
 
   const [timedPlaceholderLangKey, timedPlaceholderDate] = useMemo(() => {
     if (slowMode?.nextSendDate) {
@@ -1636,12 +1636,12 @@ const Composer: FC<OwnProps & StateProps> = ({
           className={reactionSelectorTransitonClassNames}
         />
       )}
-      <AttachmentModal
+      {/* <AttachmentModal
         chatId={chatId}
         threadId={threadId}
         canShowCustomSendMenu={canShowCustomSendMenu}
         attachments={attachments}
-        getHtml={getHtml}
+        getApiText={getApiText}
         isReady={isReady}
         shouldSuggestCompression={shouldSuggestCompression}
         shouldForceCompression={shouldForceCompression}
@@ -1663,7 +1663,7 @@ const Composer: FC<OwnProps & StateProps> = ({
         editingMessage={editingMessage}
         onSendWhenOnline={handleSendWhenOnline}
         canScheduleUntilOnline={canScheduleUntilOnline && !isViewOnceEnabled}
-      />
+      /> */}
       <PollModal
         isOpen={pollModal.isOpen}
         isQuiz={pollModal.isQuiz}
@@ -1691,7 +1691,7 @@ const Composer: FC<OwnProps & StateProps> = ({
         withUsername={Boolean(chatBotCommands)}
         botCommands={botTooltipCommands}
         quickReplies={quickReplyCommands}
-        getHtml={getHtml}
+        getApiText={getApiText}
         self={currentUser!}
         quickReplyMessages={quickReplyMessages}
         onClick={handleBotCommandSelect}
@@ -1752,7 +1752,7 @@ const Composer: FC<OwnProps & StateProps> = ({
             <WebPagePreview
               chatId={chatId}
               threadId={threadId}
-              getHtml={getHtml}
+              getApiText={getApiText}
               isDisabled={!canAttachEmbedLinks || hasAttachments}
               isEditing={Boolean(editingMessage)}
             />
@@ -1837,7 +1837,7 @@ const Composer: FC<OwnProps & StateProps> = ({
             threadId={threadId}
             isReady={isReady}
             isActive={!hasAttachments}
-            getHtml={getHtml}
+            getApiText={getApiText}
             placeholder={
               activeVoiceRecording && windowWidth <= SCREEN_WIDTH_TO_HIDE_PLACEHOLDER
                 ? ''
@@ -1852,7 +1852,7 @@ const Composer: FC<OwnProps & StateProps> = ({
             noFocusInterception={hasAttachments}
             shouldSuppressFocus={isMobile && isSymbolMenuOpen}
             shouldSuppressTextFormatter={isEmojiTooltipOpen || isMentionTooltipOpen || isInlineBotTooltipOpen}
-            onUpdate={setHtml}
+            onUpdate={setApiText}
             onSend={onSend}
             onSuppressedFocus={closeSymbolMenu}
             onFocus={markInputHasFocus}

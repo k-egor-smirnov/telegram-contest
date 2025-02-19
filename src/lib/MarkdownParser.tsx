@@ -5,6 +5,8 @@ import buildClassName from '../util/buildClassName';
 import { generateRandomInt } from '../api/gramjs/gramjsBuilders';
 import React from './teact/teactn';
 
+import ConnectionStatusOverlay from '../components/left/ConnectionStatusOverlay';
+
 interface InlineContext {
   position: number;
   block: string;
@@ -75,7 +77,7 @@ CodeBlockMessageNode | BlockquoteMessageNode;
 export class TelegramObjectModelNode<T extends AnyNode> {
   #id = generateRandomInt().toString();
 
-  #type: string;
+  #type: T['type'];
 
   #tom: TelegramObjectModel;
 
@@ -94,38 +96,50 @@ export class TelegramObjectModelNode<T extends AnyNode> {
     this.#attrs = attrs;
   }
 
-  unshiftNode(node: TelegramObjectModelNode<any>) {
-    node.#parent = this;
-    this.#children.unshift(node);
-    this.#tom.registerNode(node);
+  unshiftNode(...nodes: TelegramObjectModelNode<any>[]) {
+    for (const node of nodes) {
+      node.parent = this;
+      this.#children.unshift(node);
+      this.#tom.registerNode(node);
+    }
+
     this.onChanged();
   }
 
-  pushNode(node: TelegramObjectModelNode<any>) {
-    node.#parent = this;
-    this.#children.push(node);
-    this.#tom.registerNode(node);
+  pushNode(...nodes: TelegramObjectModelNode<any>[]) {
+    for (const node of nodes) {
+      node.parent = this;
+      this.#children.push(node);
+      this.#tom.registerNode(node);
+    }
+
     this.onChanged();
   }
 
   insertBefore(...children: Array<TelegramObjectModelNode<any>>) {
-    const index = this.#parent?.children.findIndex((v) => v === this)!;
-    console.log('children before', [...this.#parent?.children]);
-    this.#parent?.children.splice(index, 0, ...children);
-    console.log('children after', [...this.#parent?.children]);
+    const index = this.parent?.children.findIndex((v) => v === this)!;
 
     children.forEach((child) => {
+      child.parent = this.parent;
       this.#tom.registerNode(child);
     });
+
+    this.parent?.children.splice(index, 0, ...children);
+
+    this.#parent!.onChanged();
   }
 
   insertAfter(...children: Array<TelegramObjectModelNode<any>>) {
     const index = this.#parent?.children.findIndex((v) => v === this)!;
-    this.#parent?.children.splice(index + 1, 0, ...children);
 
     children.forEach((child) => {
+      child.parent = this.parent;
       this.#tom.registerNode(child);
     });
+
+    this.#parent!.children.splice(index + 1, 0, ...children);
+
+    this.#parent!.onChanged();
   }
 
   remove() {
@@ -145,8 +159,13 @@ export class TelegramObjectModelNode<T extends AnyNode> {
     this.onChanged();
   }
 
+  clone() {
+    // todo deep?
+    return new TelegramObjectModelNode<T>(this.#tom, this.#type, this.#attrs);
+  }
+
   private onChanged() {
-    if (!this.#parent) {
+    if (!this.#parent && this !== this.#tom.root) {
       // not connected
       return;
     }
@@ -184,6 +203,10 @@ export class TelegramObjectModelNode<T extends AnyNode> {
     return this.#children;
   }
 
+  set children(children) {
+    this.#children = children;
+  }
+
   get text() {
     return this.#text;
   }
@@ -197,6 +220,14 @@ export class TelegramObjectModelNode<T extends AnyNode> {
 
   get parent() {
     return this.#parent;
+  }
+
+  set parent(newParent) {
+    if (this.#parent && this.#parent !== newParent) {
+      this.#parent.#children = this.#parent.#children.filter((v) => v !== this);
+    }
+
+    this.#parent = newParent;
   }
 
   get attrs() {
@@ -221,11 +252,19 @@ export class TelegramObjectModelNode<T extends AnyNode> {
 }
 
 export class TelegramObjectModel {
-  #nodes: TelegramObjectModelNode<any>[] = [];
+  #root = new TelegramObjectModelNode<any>(this, 'root', { });
 
   #callbacks = new Set<VoidFunction>();
 
   #nodesById: Map<string, TelegramObjectModelNode<any>> = new Map();
+
+  #updateScheduled = false;
+
+  #batchInProgress = false;
+
+  constructor() {
+    this.registerNode(this.#root);
+  }
 
   registerNode(node: TelegramObjectModelNode<any>) {
     this.#nodesById.set(node.id, node);
@@ -235,27 +274,119 @@ export class TelegramObjectModel {
     this.#nodesById.delete(node.id);
   }
 
+  batchChange(cb: VoidFunction) {
+    if (this.#batchInProgress) {
+      throw new Error('batch in progress');
+    }
+
+    this.#batchInProgress = true;
+    cb();
+    this.#batchInProgress = false;
+
+    if (this.#updateScheduled) {
+      this.notifyChange(this.#root);
+      this.#updateScheduled = false;
+    }
+  }
+
   makeNode<T extends AnyNode>(type: T['type'], attrs: Omit<T, 'id' | 'type' | 'children' | 'text'>)
     : TelegramObjectModelNode<T> {
     return new TelegramObjectModelNode(this, type, attrs);
-  }
-
-  unshiftNode(node: TelegramObjectModelNode<any>) {
-    this.registerNode(node);
-    this.#nodes.unshift(node);
-  }
-
-  pushNode(node: TelegramObjectModelNode<any>) {
-    this.registerNode(node);
-    this.#nodes.push(node);
   }
 
   getNodeById(id: string) {
     return this.#nodesById.get(id);
   }
 
-  notifyChange(node: TelegramObjectModelNode<any>) {
+  notifyChange(changedNode: TelegramObjectModelNode<any>) {
+    if (this.#batchInProgress) {
+      this.#updateScheduled = true;
+      return;
+    }
+
     this.#callbacks.forEach((cb) => cb());
+
+    if (changedNode === this.#root) {
+      return;
+    }
+
+    // let textStack = '';
+    // function walkNode(node: TelegramObjectModelNode<any>) {
+    //   if (node.type === 'text') {
+    //     textStack += node.text;
+    //   } else {
+    //     console.log('stack fin', textStack);
+    //     textStack = '';
+    //   }
+    // }
+
+    // console.log('notifcy', changedNode);
+
+    const blockStack: [string[], TelegramObjectModelNode<any>[]] = [[], []];
+
+    const tryParse = (str: string, nodes: TelegramObjectModelNode<any>[], tryBlock = false) => {
+      if (tryBlock) {
+        // console.log('try block', str);
+        if (str.startsWith('```')) {
+          if (blockStack[0].length) {
+            const codeBlock = this.makeNode(ApiMessageEntityTypes.Code, {});
+            this.batchChange(() => {
+              blockStack[0].forEach((v) => {
+                const textNode = this.makeNode('text', {});
+                textNode.text = v;
+                console.log('create text', v);
+
+                codeBlock.pushNode(textNode);
+              });
+              blockStack[1].forEach((node) => node.remove());
+
+              nodes[0].parent?.insertBefore(codeBlock);
+            });
+
+            blockStack[0] = [];
+            blockStack[1] = [];
+          } else {
+            blockStack[0] = [str];
+            blockStack[1] = [...nodes];
+          }
+        } else if (blockStack[0].length) {
+          blockStack[0].push(str);
+          blockStack[1].push(...nodes);
+        }
+      }
+      if (!str) {
+        return;
+      }
+
+      const parser = new MarkdownParser();
+      const tempTOM = parser.parse(str);
+
+      if (tempTOM.root.children[0].children.find((n) => n.type !== 'text')) {
+        this.batchChange(() => {
+          nodes[0].insertBefore(...tempTOM.root.children);
+          nodes.forEach((deleteNode) => deleteNode.remove());
+        });
+      }
+    };
+
+    this.#root.children.forEach((block) => {
+      const inlineStack = ['', []];
+      block?.children.forEach((child) => {
+        if (child.type === 'text') {
+          inlineStack[0] += (child.text);
+          inlineStack[1].push(child);
+        } else {
+          tryParse(inlineStack[0], inlineStack[1]);
+          inlineStack[0] = '';
+          inlineStack[1] = [];
+        }
+      });
+
+      // there is only text nodes in block
+      if (inlineStack[0]) {
+        tryParse(inlineStack[0], inlineStack[1], true);
+      }
+    });
   }
 
   onChange(cb: VoidFunction) {
@@ -263,8 +394,8 @@ export class TelegramObjectModel {
     return () => this.#callbacks.delete(cb);
   }
 
-  get children() {
-    return this.#nodes;
+  get root() {
+    return this.#root;
   }
 
   private renderNode(node: TelegramObjectModelNode<any>): string {
@@ -274,7 +405,7 @@ export class TelegramObjectModel {
     // TODO add real state to DOM node instead of data attrs
 
     switch (node.type) {
-      case 'text': return `<span ${args}>${node.text ?? ''}</span>`;
+      case 'text': return `<span ${args}>${node.text || '&nbsp;'}</span>`;
       case ApiMessageEntityTypes.Bold: return `<strong ${args}>${innerHTML}</strong>`;
       case ApiMessageEntityTypes.Italic: return `<i ${args}>${innerHTML}</i>`;
       case 'block': return `<div ${args} data-block>${innerHTML}</div>`;
@@ -287,7 +418,7 @@ export class TelegramObjectModel {
   }
 
   get html(): string {
-    return this.children.map((block) => {
+    return this.#root.children.map((block) => {
       return this.renderNode(block);
     }).join('');
   }
@@ -332,8 +463,8 @@ export class TelegramObjectModel {
       entities.push(entity);
     }
 
-    for (let i = 0; i < this.children.length; i++) {
-      const block = this.children[i];
+    for (let i = 0; i < this.#root.children.length; i++) {
+      const block = this.#root.children[i];
 
       blockText = '';
 
@@ -351,12 +482,10 @@ export class TelegramObjectModel {
 
       text += blockText;
 
-      if (i !== this.children.length - 1) {
+      if (i !== this.#root.length - 1) {
         text += '\n';
       }
     }
-
-    console.log(text, entities);
 
     return {
       text,
@@ -430,7 +559,7 @@ export class MarkdownParser {
     };
 
     this.parseInline(ctx);
-    this.#tom.pushNode(ctx.result);
+    this.#tom.root.pushNode(ctx.result);
   }
 
   private parseInline(ctx: InlineContext) {
@@ -469,20 +598,23 @@ export class MarkdownParser {
 
     textNode.text = block.replace(/^```/, '').replace(/```$/, '');
 
-    const codeNode = this.#tom.makeNode(ApiMessageEntityTypes.Code, {
-      isStart: isCorner && ctx.startedGroup?.[0] !== ApiMessageEntityTypes.Code,
-      isEnd: isCorner && ctx.startedGroup?.[0] === ApiMessageEntityTypes.Code,
-    });
+    let codeNode: TelegramObjectModelNode<any>;
 
     if (isCorner && ctx.startedGroup?.[0] === ApiMessageEntityTypes.Code) {
       ctx.startedGroup = undefined;
+      codeNode = this.#tom.root.children.at(-1)!;
     } else if (isCorner) {
+      codeNode = this.#tom.makeNode(ApiMessageEntityTypes.Code, {
+        isStart: isCorner && ctx.startedGroup?.[0] !== ApiMessageEntityTypes.Code,
+        isEnd: isCorner && ctx.startedGroup?.[0] === ApiMessageEntityTypes.Code,
+      });
       ctx.startedGroup = [ApiMessageEntityTypes.Code, codeNode.id];
+      this.#tom.root.pushNode(codeNode);
+    } else {
+      codeNode = this.#tom.root.children.at(-1)!;
     }
 
     codeNode.pushNode(textNode);
-
-    this.#tom.pushNode(codeNode);
 
     return true;
   }
@@ -499,7 +631,7 @@ export class MarkdownParser {
     const quoteNode = this.#tom.makeNode(ApiMessageEntityTypes.Blockquote, {});
     quoteNode.pushNode(textNode);
 
-    this.#tom.pushNode(quoteNode);
+    this.#tom.root.pushNode(quoteNode);
 
     return true;
   }
@@ -546,6 +678,6 @@ export class MarkdownParser {
   }
 
   private parseItalic(ctx: InlineContext) {
-    this.parseBase(ctx, ApiMessageEntityTypes.Bold, '__');
+    this.parseBase(ctx, ApiMessageEntityTypes.Italic, '__');
   }
 }

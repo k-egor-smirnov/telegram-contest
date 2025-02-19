@@ -377,7 +377,11 @@ function remount(
     if (node) {
       parentEl.replaceChild(node, $current.target!);
     } else {
-      parentEl.removeChild($current.target!);
+      try {
+        parentEl.removeChild($current.target!);
+      } catch (err) {
+        console.warn(err);
+      }
     }
 
     unmountRealTree($current);
