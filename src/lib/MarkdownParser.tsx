@@ -254,7 +254,7 @@ export class TelegramObjectModelNode<T extends AnyNode> {
   set text(value: string) {
     if (this.#type !== 'text') throw new Error('Cannot set text on non-text node');
 
-    this.#text = value;
+    this.#text = value.replaceAll('\n', '');
     this.onChanged();
   }
 

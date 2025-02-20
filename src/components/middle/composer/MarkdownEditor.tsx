@@ -252,68 +252,71 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
               }
             }
           } else if (mutation.type === 'childList') {
-            // if (
-            //   mutation.previousSibling?.dataset?.type === 'block'
-            // && mutation.previousSibling?.dataset?.id
-            // && mutation.previousSibling?.dataset?.id === mutation.addedNodes?.[0]?.dataset?.id
-            // ) {
-            //   console.log('ch', mutation);
-            //   const prevBlockEl = mutation.previousSibling! as HTMLElement;
-            //   const prevBlockNode = newTom.getNodeById(prevBlockEl.dataset.id)!;
-            //   if (!prevBlockNode.parent) {
-            //     console.warn('no parent?', prevBlockNode);
-            //     continue;
-            //   }
-
-            //   // register new line block with id from copy
-            //   const newBlockEl = mutation.addedNodes[0]! as HTMLElement;
-            //   const blockNode = newTom.makeNode('block');
-
-            //   // Придется перерегистрировать все ноды внутри
-            //   [...newBlockEl.children].forEach((el, i) => {
-            //     const existNode = newTom.getNodeById(el.dataset.id)!;
-            //     if (!existNode) {
-            //       return;
-            //     }
-
-            //     if (i === 0 && el.dataset.type === 'text') {
-            //       const prevSpanEl = prevBlockEl.querySelector(`[data-id="${el.dataset.id}"]`) as HTMLElement;
-            //       existNode.text = prevSpanEl.innerText;
-
-            //       const newNode = newTom.makeNode('text', {});
-            //       newNode.text = el.innerText;
-            //       blockNode.pushNode(newNode);
-            //     } else {
-            //       blockNode.pushNode(existNode);
-            //     }
-            //   });
-
-            //   newBlockEl.remove();
-
-            //   prevBlockNode.insertAfter(blockNode);
-            //   nextMutationSafe.add(prevBlockNode);
-            // }
-
-            function checkBlock(checkBlockNode: HTMLElement) {
-              if (
-                checkBlockNode.children.length === 1
-                    && checkBlockNode.children[0].tagName === 'BR'
-              ) {
-                const blockInstance = newTom.getNodeById(checkBlockNode.dataset.id);
-                if (blockInstance) {
-                  const textNode = newTom.makeNode('text', {});
-                  textNode.text = '';
-                  blockInstance?.pushNode(textNode);
-                  deleteNodeIds.delete(blockInstance.id);
-                }
-              } else if (checkBlockNode.children.length === 0) {
-                const textNode = newTom.makeNode('text', {});
-                textNode.text = '';
-                const blockNode = newTom.makeNode('block', {});
-                blockNode.pushNode(textNode);
-                newTom.root.pushNode(blockNode);
+            if (
+              mutation.previousSibling?.dataset?.type === 'block'
+            && mutation.previousSibling?.dataset?.id
+            && mutation.previousSibling?.dataset?.id === mutation.addedNodes?.[0]?.dataset?.id
+            ) {
+              console.log('ch', mutation);
+              const prevBlockEl = mutation.previousSibling! as HTMLElement;
+              const prevBlockNode = newTom.getNodeById(prevBlockEl.dataset.id)!;
+              if (!prevBlockNode.parent) {
+                console.warn('no parent?', prevBlockNode);
+                continue;
               }
+
+              // register new line block with id from copy
+              const newBlockEl = mutation.addedNodes[0]! as HTMLElement;
+              const blockNode = newTom.makeNode('block');
+
+              // Придется перерегистрировать все ноды внутри
+              [...newBlockEl.children].forEach((el, i) => {
+                const existNode = newTom.getNodeById(el.dataset.id)!;
+                if (!existNode) {
+                  return;
+                }
+
+                if (i === 0 && el.dataset.type === 'text') {
+                  const prevSpanEl = prevBlockEl.querySelector(`[data-id="${el.dataset.id}"]`) as HTMLElement;
+                  existNode.text = prevSpanEl.innerText;
+
+                  const newNode = newTom.makeNode('text', {});
+                  newNode.text = el.innerText;
+                  blockNode.pushNode(newNode);
+                } else {
+                  blockNode.pushNode(existNode);
+                }
+              });
+
+              newBlockEl.dataset.id = '';
+              newBlockEl.dataset.type = '';
+              newBlockEl.remove();
+
+              prevBlockNode.insertAfter(blockNode);
+              addedNodeIds.add(prevBlockEl.dataset.id);
+              // nextMutationSafe.add(prevBlockNode);
             }
+
+            // function checkBlock(checkBlockNode: HTMLElement) {
+            //   if (
+            //     checkBlockNode.children.length === 1
+            //         && checkBlockNode.children[0].tagName === 'BR'
+            //   ) {
+            //     const blockInstance = newTom.getNodeById(checkBlockNode.dataset.id);
+            //     if (blockInstance) {
+            //       const textNode = newTom.makeNode('text', {});
+            //       textNode.text = '';
+            //       blockInstance?.pushNode(textNode);
+            //       deleteNodeIds.delete(blockInstance.id);
+            //     }
+            //   } else if (checkBlockNode.children.length === 0) {
+            //     const textNode = newTom.makeNode('text', {});
+            //     textNode.text = '';
+            //     const blockNode = newTom.makeNode('block', {});
+            //     blockNode.pushNode(textNode);
+            //     newTom.root.pushNode(blockNode);
+            //   }
+            // }
 
             for (const rNode of mutation.removedNodes) {
               if (!rNode?.dataset?.id) {
@@ -431,6 +434,8 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
             });
           }
 
+          console.log('remove', n, n.type);
+
           n.remove();
         });
 
@@ -520,11 +525,9 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
     });
 
     document.addEventListener('selectionchange', (e) => {
-      console.log('change selection', e);
       if (nextSelectionRange.current) {
         const selection = document.getSelection();
         if (selection) {
-          console.log('keep', nextSelectionRange.current);
           const parentNode = nextSelectionRange.current[0];
           // check multiple nodes?
           const textNode = parentNode.childNodes[0];
@@ -535,7 +538,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
           selection.removeAllRanges();
           selection.addRange(range);
-          console.log(range.startContainer);
           nextSelectionRange.current = undefined;
         }
       }
@@ -615,7 +617,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
         ref={(el) => inputRef.current = el}
         data-type={tom?.root.type}
         data-id={tom?.root.id}
-        onBeforeInput={(e) => console.log('before input', e)}
+        // onBeforeInput={(e) => console.log('before input', e)}
         onInput={handleInput}
       >
         {tom?.root.children.map((node) => {
