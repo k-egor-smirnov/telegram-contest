@@ -1,7 +1,9 @@
 /* eslint-disable no-inner-declarations */
 /* eslint-disable react/jsx-props-no-spreading */
+import type { FormEvent } from 'react';
 import type { RefObject } from '../../../lib/teact/teact';
 import {
+  memo,
   useEffect, useRef, useState,
 } from '../../../lib/teact/teact';
 import React from '../../../lib/teact/teactn';
@@ -118,6 +120,10 @@ function CodeblockNode({
   );
 }
 
+const TextNode = memo(({ node, ...args }) => {
+  return <span {...args} key={node.id + Boolean(node.text)}>{node.text || <br />}</span>;
+});
+
 function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; selectedIDsSet: RefObject<Set<string>> }) {
   const args = {
     'data-id': node.id,
@@ -126,7 +132,7 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
   };
 
   if (node.type === 'text') {
-    return <span {...args} key={node.id + Boolean(node.text)}>{node.text || <br />}</span>;
+    return <TextNode {...args} node={node} key={node.id + Boolean(node.text)} />;
   }
 
   const inner = node.children.map((child) => <MDNode node={child} key={child.id} selectedIDsSet={selectedIDsSet} />);
@@ -161,6 +167,8 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
 export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
   let inputRef = useRef<HTMLElement>();
   const forceUpdate = useForceUpdate();
+
+  const nextSelectionRange = useRef<[HTMLElement, number, number]>();
 
   const selectedIDsSet = useRef<Set<string>>();
 
@@ -511,7 +519,27 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
       characterDataOldValue: true,
     });
 
-    document.addEventListener('selectionchange', () => {
+    document.addEventListener('selectionchange', (e) => {
+      console.log('change selection', e);
+      if (nextSelectionRange.current) {
+        const selection = document.getSelection();
+        if (selection) {
+          console.log('keep', nextSelectionRange.current);
+          const parentNode = nextSelectionRange.current[0];
+          // check multiple nodes?
+          const textNode = parentNode.childNodes[0];
+
+          const range = new Range();
+          range.setStart(textNode, nextSelectionRange.current[1]);
+          range.setEnd(textNode, nextSelectionRange.current[2]);
+
+          selection.removeAllRanges();
+          selection.addRange(range);
+          console.log(range.startContainer);
+          nextSelectionRange.current = undefined;
+        }
+      }
+
       const selection = document.getSelection();
 
       // if (keepSelectionRef.current) {
@@ -567,6 +595,17 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
     return () => unsub?.();
   }, [tom]);
 
+  function handleInput(e: FormEvent<HTMLInputElement>) {
+    const selection = document.getSelection();
+    if (!selection || !selection.rangeCount) {
+      return;
+    }
+
+    const range = selection.getRangeAt(0)!;
+    // teact rerenders text as new DOM node
+    nextSelectionRange.current = [range.startContainer.parentElement as HTMLElement, range.startOffset, range.endOffset];
+  }
+
   return (
     <>
       <div dangerouslySetInnerHTML={{ __html: tom?.html }} style="position: fixed; top: 0; right: 0; transform: scale(0.5); transform-origin: top right;" />
@@ -576,6 +615,8 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
         ref={(el) => inputRef.current = el}
         data-type={tom?.root.type}
         data-id={tom?.root.id}
+        onBeforeInput={(e) => console.log('before input', e)}
+        onInput={handleInput}
       >
         {tom?.root.children.map((node) => {
           return <MDNode key={node.id} node={node} selectedIDsSet={selectedIDsSet} />;
