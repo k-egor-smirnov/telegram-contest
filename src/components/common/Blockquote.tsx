@@ -22,7 +22,9 @@ type OwnProps = {
 
 const MAX_LINES = 4;
 
-const Blockquote = ({ canBeCollapsible, isToggleDisabled, children }: OwnProps) => {
+const Blockquote = ({
+  canBeCollapsible, isToggleDisabled, children, ...restProps
+}: OwnProps) => {
   // eslint-disable-next-line no-null/no-null
   const ref = useRef<HTMLQuoteElement>(null);
   const {
@@ -43,6 +45,7 @@ const Blockquote = ({ canBeCollapsible, isToggleDisabled, children }: OwnProps) 
     <span
       className={buildClassName(styles.root, isCollapsed && styles.collapsed)}
       onClick={canExpand ? handleExpand : undefined}
+      {...restProps}
     >
       <blockquote
         className={styles.blockquote}

@@ -7,6 +7,7 @@ import React from '../../../lib/teact/teactn';
 import type { TelegramObjectModel, TelegramObjectModelNode } from '../../../lib/MarkdownParser';
 import { ApiMessageEntityTypes } from '../../../api/types';
 
+import { analyzeData } from '../../../lib/lovely-chart/data';
 import { MarkdownParser } from '../../../lib/MarkdownParser';
 import buildClassName from '../../../util/buildClassName';
 
@@ -125,7 +126,7 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
   };
 
   if (node.type === 'text') {
-    return <span {...args}>{node.text || '\u00A0'}</span>;
+    return <span {...args} key={node.id + Boolean(node.text)}>{node.text || <br />}</span>;
   }
 
   const inner = node.children.map((child) => <MDNode node={child} key={child.id} selectedIDsSet={selectedIDsSet} />);
@@ -144,7 +145,7 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
   switch (node.type) {
     case ApiMessageEntityTypes.Bold: return <BoldNode selected={isSelected} {...args}>{inner}</BoldNode>;
     case ApiMessageEntityTypes.Italic: return <ItalicNode selected={isSelected} {...args}>{inner}</ItalicNode>;
-    case 'block': return <div {...args} id={`md-block-${node.id}`} data-block>{inner}</div>;
+    case 'block': return <div {...args} id={`md-block-${node.id}`} data-block>{inner.length ? inner : ''}</div>;
     case ApiMessageEntityTypes.Code:
       return (
         <CodeblockNode node={node} selected={isSelected} />
@@ -168,13 +169,14 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
   // const prevSelection = useRef < []();
 
   const [tom, setTom] = useState<TelegramObjectModel>();
-  const [keepSelection, setKeepSelection] = useState<Range>();
+  const keepSelectionRef = useRef<Range>();
 
   useEffect(() => {
     selectedIDsSet.current = new Set();
 
     const newTom = (new MarkdownParser().parse(
-      'hello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\n ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```\n> lol\nkek > lol\n>lol\n>kek',
+      // 'hello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\nhello **bold** or __italic__ world __is__ good\n ```js some code block``` and ```js\nmultiline\ncode\nblock\n```\ntest\n```js\nalert(123)```\n> lol\nkek > lol\n>lol\n>kek',
+      '',
     ));
 
     let isUpdateQueued = false;
@@ -197,8 +199,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
     setTom(newTom);
 
-    const nextMutationSafe = new Set<TelegramObjectModelNode<any>>();
-
     const observer = new MutationObserver((mutations) => {
       newTom.batchChange(() => {
         console.log(mutations);
@@ -207,12 +207,14 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
         const nodesReplacements = new Map<TelegramObjectModelNode<any>, Array<TelegramObjectModelNode<any>>>();
 
         const modifiedMarkerNodeMutations = mutations
-          .filter((m) => m.type === 'characterData' && m.target.parentElement!.classList.contains('marker'));
+          .filter((m) => m.type === 'characterData' && m.target.parentElement?.classList.contains('marker'));
 
         mutations = mutations.filter((mutation) => !modifiedMarkerNodeMutations.includes(mutation));
 
-        const safeNodes = new Set<TelegramObjectModelNode<any>>();
+        const addedNodeIds = new Set<string>();
         const deleteNodeIds = new Set<string>();
+
+        const stash = new Map<string, TelegramObjectModelNode<any>>();
 
         for (const mutation of mutations) {
           if (mutation.type === 'characterData') {
@@ -228,59 +230,61 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
               }
 
               // not working
-              setKeepSelection(document.getSelection()?.getRangeAt(0).cloneRange());
+              keepSelectionRef.current = document.getSelection()?.getRangeAt(0).cloneRange();
 
               if (!tomID) {
                 console.log('not a tom text', tomNode, mutation);
               }
 
               const tomInstance = newTom.getNodeById(tomID);
-              if (tomInstance) {
+              if (tomInstance && tomInstance.type === 'text') {
                 tomInstance!.text = mutation.target.nodeValue;
               } else {
                 console.log('not found tom instance', mutation, mutation.target);
               }
             }
           } else if (mutation.type === 'childList') {
-            if (
-              mutation.previousSibling?.dataset?.type === 'block'
-            && mutation.previousSibling?.dataset?.id
-            && mutation.previousSibling?.dataset?.id === mutation.addedNodes?.[0]?.dataset?.id
-            ) {
-              console.log('ch', mutation);
-              const prevBlockEl = mutation.previousSibling! as HTMLElement;
-              const prevBlockNode = newTom.getNodeById(prevBlockEl.dataset.id)!;
-              if (!prevBlockNode.parent) {
-                console.warn('no parent?', prevBlockNode);
-                continue;
-              }
+            // if (
+            //   mutation.previousSibling?.dataset?.type === 'block'
+            // && mutation.previousSibling?.dataset?.id
+            // && mutation.previousSibling?.dataset?.id === mutation.addedNodes?.[0]?.dataset?.id
+            // ) {
+            //   console.log('ch', mutation);
+            //   const prevBlockEl = mutation.previousSibling! as HTMLElement;
+            //   const prevBlockNode = newTom.getNodeById(prevBlockEl.dataset.id)!;
+            //   if (!prevBlockNode.parent) {
+            //     console.warn('no parent?', prevBlockNode);
+            //     continue;
+            //   }
 
-              // register new line block with id from copy
-              const newBlockEl = mutation.addedNodes[0]! as HTMLElement;
-              const blockNode = newTom.makeNode('block');
+            //   // register new line block with id from copy
+            //   const newBlockEl = mutation.addedNodes[0]! as HTMLElement;
+            //   const blockNode = newTom.makeNode('block');
 
-              // Придется перерегистрировать все ноды внутри
-              newBlockEl.querySelectorAll(['[data-type]']).forEach((el, i) => {
-                const existNode = newTom.getNodeById(el.dataset.id)!;
+            //   // Придется перерегистрировать все ноды внутри
+            //   [...newBlockEl.children].forEach((el, i) => {
+            //     const existNode = newTom.getNodeById(el.dataset.id)!;
+            //     if (!existNode) {
+            //       return;
+            //     }
 
-                if (i === 0 && el.dataset.type === 'text') {
-                  const prevSpanEl = prevBlockEl.querySelector(`[data-id="${el.dataset.id}"]`) as HTMLElement;
-                  existNode.text = prevSpanEl.innerText;
+            //     if (i === 0 && el.dataset.type === 'text') {
+            //       const prevSpanEl = prevBlockEl.querySelector(`[data-id="${el.dataset.id}"]`) as HTMLElement;
+            //       existNode.text = prevSpanEl.innerText;
 
-                  const newNode = newTom.makeNode('text', {});
-                  newNode.text = el.innerText;
-                  blockNode.pushNode(newNode);
-                } else {
-                  blockNode.pushNode(existNode);
-                }
-              });
+            //       const newNode = newTom.makeNode('text', {});
+            //       newNode.text = el.innerText;
+            //       blockNode.pushNode(newNode);
+            //     } else {
+            //       blockNode.pushNode(existNode);
+            //     }
+            //   });
 
-              newBlockEl.remove();
+            //   newBlockEl.remove();
 
-              prevBlockNode.insertAfter(blockNode);
-              nextMutationSafe.add(blockNode);
-              nextMutationSafe.add(prevBlockNode);
-            }
+            //   prevBlockNode.insertAfter(blockNode);
+            //   nextMutationSafe.add(prevBlockNode);
+            // }
 
             for (const rNode of mutation.removedNodes) {
               if (!rNode?.dataset?.id) {
@@ -289,38 +293,88 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
               const tomInstance = newTom.getNodeById(rNode.dataset.id);
               if (tomInstance) {
-                deleteNodeIds.add(tomInstance.id);
+                // не можем удалять сразу, так как за ним удалятся и все дети
+                if (!addedNodeIds.delete(tomInstance.id)) {
+                  deleteNodeIds.add(tomInstance.id);
+                }
+              }
+
+              if (rNode?.dataset?.type === 'block') {
+                if (
+                  (rNode as HTMLElement).children.length === 1
+                    && (rNode as HTMLElement).children[0].tagName === 'BR'
+                ) {
+                  const blockInstance = newTom.getNodeById(rNode.dataset.id);
+                  if (blockInstance) {
+                    const textNode = newTom.makeNode('text', {});
+                    textNode.text = '';
+                    blockInstance?.pushNode(textNode);
+                  }
+                } else if ((rNode as HTMLElement).children.length === 0) {
+                  const textNode = newTom.makeNode('text', {});
+                  textNode.text = '';
+                  const blockNode = newTom.makeNode('block', {});
+                  blockNode.pushNode(textNode);
+                  newTom.root.pushNode(blockNode);
+                }
+              }
+
+              if (inputRef.current?.children.length === 0) {
+                const textNode = newTom.makeNode('text', {});
+                textNode.text = '';
+                const blockNode = newTom.makeNode('block', {});
+                blockNode.pushNode(textNode);
+                newTom.root.pushNode(blockNode);
+              } else if (inputRef.current?.children.length === 1 && inputRef.current.children[0].children.length === 1) {
+                const blockInstance = newTom.getNodeById(inputRef.current.children[0].dataset.id);
+                if (blockInstance) {
+                  const textNode = newTom.makeNode('text', {});
+                  textNode.text = '';
+                  blockInstance?.pushNode(textNode);
+                }
               }
             }
 
             for (const aNode of mutation.addedNodes) {
+              if (mutation.removedNodes[0] && aNode === mutation.removedNodes[0]) {
+                continue;
+              }
+
               if (!aNode?.dataset?.id) {
                 continue;
               }
 
-              const tomInstance = newTom.getNodeById(aNode.dataset.id);
-              const domParentId = aNode.parentElement?.dataset.id;
-
-              if (domParentId && domParentId !== tomInstance?.parent.id) {
-                // У TOM нод еще старый parent, надо это учитывать
-                const mutationTargetNode = newTom.getNodeById(mutation.target?.dataset?.id);
-                const mutationNextSiblingNode = newTom.getNodeById(mutation.nextSibling?.dataset?.id);
-                const mutationPrevSiblingNode = newTom.getNodeById(mutation.previousSibling?.dataset?.id);
-
-                // if (mutationPrevSiblingNode) {
-                //   mutationPrevSiblingNode.insertAfter(tomInstance);
-                //   console.log('after', tomInstance, tomInstance?.type, tomInstance.text, mutation.previousSibling);
-                // } else if (mutationNextSiblingNode) {
-                //   mutationNextSiblingNode.insertBefore(tomInstance);
-                //   console.log('before', tomInstance, tomInstance?.type, tomInstance.text);
-                // } else if (mutationTargetNode) {
-                //   mutationTargetNode.pushNode(tomInstance);
-                //   console.log('push', tomInstance, tomInstance?.type, tomInstance.text);
-                // }
+              if (aNode.dataset.id === mutation.previousSibling?.dataset?.id) {
+                continue;
               }
 
-              if (deleteNodeIds.delete(tomInstance.id)) {
-              // continue;
+              const tomInstance = newTom.getNodeById(aNode.dataset.id) ?? stash.get(aNode.dataset.id);
+
+              if (!tomInstance) {
+                console.warn('no instance', aNode);
+                continue;
+              }
+
+              if (!deleteNodeIds.delete(tomInstance.id)) {
+                addedNodeIds.add(tomInstance.id);
+              }
+
+              const domParentId = aNode.parentElement?.dataset.id;
+
+              // У TOM нод еще старый parent, надо это учитывать
+              const mutationTargetNode = newTom.getNodeById(mutation.target?.dataset?.id);
+              const mutationNextSiblingNode = newTom.getNodeById(mutation.nextSibling?.dataset?.id);
+              const mutationPrevSiblingNode = newTom.getNodeById(mutation.previousSibling?.dataset?.id);
+
+              if (mutationPrevSiblingNode) {
+                mutationPrevSiblingNode.insertAfter(tomInstance);
+                console.log('after', tomInstance, tomInstance?.type, tomInstance.text, mutation.previousSibling);
+              } else if (mutationNextSiblingNode) {
+                mutationNextSiblingNode.insertBefore(tomInstance);
+                console.log('before', tomInstance, tomInstance?.type, tomInstance.text);
+              } else if (mutationTargetNode) {
+                mutationTargetNode.pushNode(tomInstance);
+                console.log('push', tomInstance, tomInstance?.type, tomInstance.text);
               }
             }
           }
@@ -328,16 +382,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
         deleteNodeIds.forEach((id) => {
           const n = newTom.getNodeById(id);
-
-          if (safeNodes.has(n) || !n) {
-            return;
-          }
-
-          if (nextMutationSafe.has(n)) {
-            console.log('safe', n);
-            nextMutationSafe.delete(n);
-            return;
-          }
 
           console.log('remove', n.type, n);
 
@@ -419,6 +463,18 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
     document.addEventListener('selectionchange', () => {
       const selection = document.getSelection();
+      const r = selection?.getRangeAt(0).cloneRange();
+      console.log(selection?.getRangeAt(0).startOffset);
+      setTimeout(() => console.log(r?.startOffset), 1000);
+
+      // if (keepSelectionRef.current) {
+      //   selection?.removeAllRanges();
+      //   selection?.addRange(keepSelectionRef.current);
+      //   console.log('keep', keepSelectionRef.current);
+      //   queueMicrotask(() => {
+      //     keepSelectionRef.current = undefined;
+      //   });
+      // }
 
       if (!selection?.rangeCount) {
         return;
@@ -450,10 +506,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
   //   if (!keepSelection) {
   //     return;
   //   }
-
-  //   const sel = document.getSelection();
-  //   sel?.removeAllRanges();
-  //   sel?.addRange(keepSelection);
   //   setKeepSelection(undefined);
   // }, [keepSelection]);
 
@@ -461,8 +513,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
     if (tom) {
       onUpdate(tom?.apiText);
     }
-    console.log(tom?.apiText);
-
     const unsub = tom?.onChange(() => {
       onUpdate(tom.apiText);
     });
@@ -470,12 +520,16 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
     return () => unsub?.();
   }, [tom]);
 
-  console.log(tom?.root);
-
   return (
     <>
-      <div dangerouslySetInnerHTML={{ __html: tom?.html }} style="position: fixed; top: 0; right: 0; transform: scale(0.3); transform-origin: top right;" />
-      <div {...restProps} contentEditable ref={(el) => inputRef.current = el}>
+      <div dangerouslySetInnerHTML={{ __html: tom?.html }} style="position: fixed; top: 0; right: 0; transform: scale(0.5); transform-origin: top right;" />
+      <div
+        {...restProps}
+        contentEditable
+        ref={(el) => inputRef.current = el}
+        data-type={tom?.root.type}
+        data-id={tom?.root.id}
+      >
         {tom?.root.children.map((node) => {
           return <MDNode key={node.id} node={node} selectedIDsSet={selectedIDsSet} />;
         })}

@@ -99,7 +99,7 @@ export class TelegramObjectModelNode<T extends AnyNode> {
   unshiftNode(...nodes: TelegramObjectModelNode<any>[]) {
     for (const node of nodes) {
       node.parent = this;
-      this.#children.unshift(node);
+      this.#children = [node, ...this.#children.filter((v) => v !== node)];
       this.#tom.registerNode(node);
     }
 
@@ -109,7 +109,7 @@ export class TelegramObjectModelNode<T extends AnyNode> {
   pushNode(...nodes: TelegramObjectModelNode<any>[]) {
     for (const node of nodes) {
       node.parent = this;
-      this.#children.push(node);
+      this.#children = [...this.#children.filter((v) => v !== node), node];
       this.#tom.registerNode(node);
     }
 
@@ -117,12 +117,18 @@ export class TelegramObjectModelNode<T extends AnyNode> {
   }
 
   insertBefore(...children: Array<TelegramObjectModelNode<any>>) {
-    const index = this.parent?.children.findIndex((v) => v === this)!;
+    if (!this.#parent) {
+      throw new Error('no parent');
+    }
+
+    this.#parent.#children = [...this.#parent.#children.filter((v) => !children.includes(v))];
 
     children.forEach((child) => {
       child.parent = this.parent;
       this.#tom.registerNode(child);
     });
+
+    const index = this.parent?.children.findIndex((v) => v === this)!;
 
     this.parent?.children.splice(index, 0, ...children);
 
@@ -130,12 +136,18 @@ export class TelegramObjectModelNode<T extends AnyNode> {
   }
 
   insertAfter(...children: Array<TelegramObjectModelNode<any>>) {
-    const index = this.#parent?.children.findIndex((v) => v === this)!;
+    if (!this.#parent) {
+      throw new Error('no parent');
+    }
+
+    this.#parent.#children = [...this.#parent.#children.filter((v) => !children.includes(v))];
 
     children.forEach((child) => {
       child.parent = this.parent;
       this.#tom.registerNode(child);
     });
+
+    const index = this.#parent?.children.findIndex((v) => v === this)!;
 
     this.#parent!.children.splice(index + 1, 0, ...children);
 
@@ -260,7 +272,7 @@ export class TelegramObjectModel {
 
   #updateScheduled = false;
 
-  #batchInProgress = false;
+  #batchInProgress = 0;
 
   constructor() {
     this.registerNode(this.#root);
@@ -275,16 +287,16 @@ export class TelegramObjectModel {
   }
 
   batchChange(cb: VoidFunction) {
-    if (this.#batchInProgress) {
-      throw new Error('batch in progress');
+    this.#batchInProgress++;
+    cb();
+    this.#batchInProgress--;
+
+    if (this.#batchInProgress > 0) {
+      return;
     }
 
-    this.#batchInProgress = true;
-    cb();
-    this.#batchInProgress = false;
-
     if (this.#updateScheduled) {
-      this.notifyChange(this.#root);
+      this.notifyChange();
       this.#updateScheduled = false;
     }
   }
@@ -363,7 +375,7 @@ export class TelegramObjectModel {
 
       if (tempTOM.root.children[0].children.find((n) => n.type !== 'text')) {
         this.batchChange(() => {
-          nodes[0].insertBefore(...tempTOM.root.children);
+          nodes[0].insertBefore(...tempTOM.root.children[0].children);
           nodes.forEach((deleteNode) => deleteNode.remove());
         });
       }
@@ -405,7 +417,7 @@ export class TelegramObjectModel {
     // TODO add real state to DOM node instead of data attrs
 
     switch (node.type) {
-      case 'text': return `<span ${args}>${node.text || '&nbsp;'}</span>`;
+      case 'text': return `<span ${args}>${node.text || ''}</span>`;
       case ApiMessageEntityTypes.Bold: return `<strong ${args}>${innerHTML}</strong>`;
       case ApiMessageEntityTypes.Italic: return `<i ${args}>${innerHTML}</i>`;
       case 'block': return `<div ${args} data-block>${innerHTML}</div>`;
@@ -538,6 +550,12 @@ export class MarkdownParser {
     blocks.forEach((block) => {
       this.parseBlock(ctx, block);
     });
+
+    if (this.#tom.root.children.length === 1 && this.#tom.root.children[0].children.length === 0) {
+      const emptyTextNode = this.#tom.makeNode('text', {});
+      emptyTextNode.text = '';
+      this.#tom.root.children[0].pushNode(emptyTextNode);
+    }
 
     return this.#tom;
   }
