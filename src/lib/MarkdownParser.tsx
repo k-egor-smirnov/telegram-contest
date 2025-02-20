@@ -98,6 +98,7 @@ export class TelegramObjectModelNode<T extends AnyNode> {
 
   unshiftNode(...nodes: TelegramObjectModelNode<any>[]) {
     for (const node of nodes) {
+      node.#tom = this.#tom;
       node.parent = this;
       this.#children = [node, ...this.#children.filter((v) => v !== node)];
       this.#tom.registerNode(node);
@@ -108,12 +109,37 @@ export class TelegramObjectModelNode<T extends AnyNode> {
 
   pushNode(...nodes: TelegramObjectModelNode<any>[]) {
     for (const node of nodes) {
+      // if (node.type === 'text' && this.#children.at(-1)?.type === 'text') {
+      //   // should be commited after mutations
+      //   this.#children.at(-1)!.text += node.text;
+      // } else {
+      node.#tom = this.#tom;
       node.parent = this;
       this.#children = [...this.#children.filter((v) => v !== node), node];
       this.#tom.registerNode(node);
+      // }
     }
 
     this.onChanged();
+  }
+
+  private bakeNode(node: TelegramObjectModelNode<any>) {
+    for (const child of node.children) {
+      if (child.type === 'text' && child.previousSibling?.type === 'text') {
+        child.previousSibling.text += child.text;
+        child.remove();
+      }
+
+      if (child.children) {
+        this.bakeNode(child);
+      }
+    }
+  }
+
+  bakeNodes() {
+    this.#tom.batchChange(() => {
+      this.bakeNode(this);
+    });
   }
 
   insertBefore(...children: Array<TelegramObjectModelNode<any>>) {
@@ -125,6 +151,7 @@ export class TelegramObjectModelNode<T extends AnyNode> {
 
     children.forEach((child) => {
       child.parent = this.parent;
+      child.#tom = this.#tom;
       this.#tom.registerNode(child);
     });
 
@@ -144,6 +171,7 @@ export class TelegramObjectModelNode<T extends AnyNode> {
 
     children.forEach((child) => {
       child.parent = this.parent;
+      child.#tom = this.#tom;
       this.#tom.registerNode(child);
     });
 

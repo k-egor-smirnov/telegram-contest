@@ -1,15 +1,15 @@
+/* eslint-disable no-inner-declarations */
 /* eslint-disable react/jsx-props-no-spreading */
-import { node } from 'webpack';
 import type { RefObject } from '../../../lib/teact/teact';
-import { useEffect, useRef, useState } from '../../../lib/teact/teact';
+import {
+  useEffect, useRef, useState,
+} from '../../../lib/teact/teact';
 import React from '../../../lib/teact/teactn';
 
 import type { TelegramObjectModel, TelegramObjectModelNode } from '../../../lib/MarkdownParser';
 import { ApiMessageEntityTypes } from '../../../api/types';
 
-import { analyzeData } from '../../../lib/lovely-chart/data';
 import { MarkdownParser } from '../../../lib/MarkdownParser';
-import buildClassName from '../../../util/buildClassName';
 
 import useForceUpdate from '../../../hooks/useForceUpdate';
 
@@ -286,6 +286,27 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
             //   nextMutationSafe.add(prevBlockNode);
             // }
 
+            function checkBlock(checkBlockNode: HTMLElement) {
+              if (
+                checkBlockNode.children.length === 1
+                    && checkBlockNode.children[0].tagName === 'BR'
+              ) {
+                const blockInstance = newTom.getNodeById(checkBlockNode.dataset.id);
+                if (blockInstance) {
+                  const textNode = newTom.makeNode('text', {});
+                  textNode.text = '';
+                  blockInstance?.pushNode(textNode);
+                  deleteNodeIds.delete(blockInstance.id);
+                }
+              } else if (checkBlockNode.children.length === 0) {
+                const textNode = newTom.makeNode('text', {});
+                textNode.text = '';
+                const blockNode = newTom.makeNode('block', {});
+                blockNode.pushNode(textNode);
+                newTom.root.pushNode(blockNode);
+              }
+            }
+
             for (const rNode of mutation.removedNodes) {
               if (!rNode?.dataset?.id) {
                 continue;
@@ -296,41 +317,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
                 // не можем удалять сразу, так как за ним удалятся и все дети
                 if (!addedNodeIds.delete(tomInstance.id)) {
                   deleteNodeIds.add(tomInstance.id);
-                }
-              }
-
-              if (rNode?.dataset?.type === 'block') {
-                if (
-                  (rNode as HTMLElement).children.length === 1
-                    && (rNode as HTMLElement).children[0].tagName === 'BR'
-                ) {
-                  const blockInstance = newTom.getNodeById(rNode.dataset.id);
-                  if (blockInstance) {
-                    const textNode = newTom.makeNode('text', {});
-                    textNode.text = '';
-                    blockInstance?.pushNode(textNode);
-                  }
-                } else if ((rNode as HTMLElement).children.length === 0) {
-                  const textNode = newTom.makeNode('text', {});
-                  textNode.text = '';
-                  const blockNode = newTom.makeNode('block', {});
-                  blockNode.pushNode(textNode);
-                  newTom.root.pushNode(blockNode);
-                }
-              }
-
-              if (inputRef.current?.children.length === 0) {
-                const textNode = newTom.makeNode('text', {});
-                textNode.text = '';
-                const blockNode = newTom.makeNode('block', {});
-                blockNode.pushNode(textNode);
-                newTom.root.pushNode(blockNode);
-              } else if (inputRef.current?.children.length === 1 && inputRef.current.children[0].children.length === 1) {
-                const blockInstance = newTom.getNodeById(inputRef.current.children[0].dataset.id);
-                if (blockInstance) {
-                  const textNode = newTom.makeNode('text', {});
-                  textNode.text = '';
-                  blockInstance?.pushNode(textNode);
                 }
               }
             }
@@ -383,27 +369,89 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
         deleteNodeIds.forEach((id) => {
           const n = newTom.getNodeById(id);
 
-          console.log('remove', n.type, n);
+          // const checkBlockNode: HTMLElement | undefined = rNode?.dataset?.type === 'block'
+          //   ? rNode
+          //   : mutation.target?.dataset?.type === 'block'
+          //     ? mutation.target : undefined;
+
+          // if (checkBlockNode) {
+          //   checkBlock(checkBlockNode);
+          // }
+
+          // if (inputRef.current?.children.length === 0) {
+          //   const textNode = newTom.makeNode('text', {});
+          //   textNode.text = '';
+          //   const blockNode = newTom.makeNode('block', {});
+          //   blockNode.pushNode(textNode);
+          //   newTom.root.pushNode(blockNode);
+          // } else if (inputRef.current?.children.length === 1 && inputRef.current.children[0].children.length === 1) {
+          //   const blockInstance = newTom.getNodeById(inputRef.current.children[0].dataset.id);
+          //   if (blockInstance) {
+          //     const textNode = newTom.makeNode('text', {});
+          //     textNode.text = '';
+          //     blockInstance?.pushNode(textNode);
+          //   }
+          // }
+
+          // console.log('remove', n.type, n);
+
+          if (n && (n.parent!.type === 'root') && n.parent?.children.length === 1) {
+            const blockNode = newTom.makeNode('block', {});
+            const textNode = newTom.makeNode('text', {});
+            textNode.text = '';
+            blockNode.pushNode(textNode);
+            n.insertBefore(blockNode);
+
+            mutations.forEach((mutation) => {
+              for (const node of mutation.addedNodes) {
+                if (node.tagName === 'BR') {
+                  node.remove();
+                }
+              }
+            });
+          } else if (n && (n.parent!.type === 'block') && n.parent?.children.length === 1) {
+            const textNode = newTom.makeNode('text', {});
+            textNode.text = '';
+            n.insertBefore(textNode);
+
+            mutations.forEach((mutation) => {
+              for (const node of mutation.addedNodes) {
+                if (node.tagName === 'BR') {
+                  node.remove();
+                }
+              }
+            });
+          }
 
           n.remove();
         });
 
+        const unwrapNodes = new Set<HTMLElement>();
+
         // first delete inner contents then modify markers
         for (const mutation of modifiedMarkerNodeMutations) {
-          const markerEl = mutation.target.parentElement;
-
           const tomNode = mutation.target.parentElement?.closest('[data-type]') as HTMLElement;
+          unwrapNodes.add(tomNode);
+        }
+
+        unwrapNodes.forEach((tomNode: HTMLElement) => {
           const tomInstance = newTom.getNodeById(tomNode?.dataset.id)!;
           if (!tomInstance) {
             console.log('not found tom instance for', tomNode);
-            continue;
+            return;
           }
+
+          const markerNodes = tomNode.querySelectorAll('.marker');
+
+          const startMarker: HTMLElement = markerNodes[0] === tomNode.firstChild ? markerNodes[0] : undefined;
+          const endMarkerTemp = (markerNodes[1] ?? markerNodes[0]);
+          const endMarker: HTMLElement = endMarkerTemp === startMarker ? undefined : endMarkerTemp;
 
           if (!nodesReplacements.has(tomInstance)) {
             if (tomInstance.type === ApiMessageEntityTypes.Code) {
               nodesReplacements.set(tomInstance, [...tomInstance.children.map((v) => {
-                const blockNode = newTom.makeNode('block');
-                const textNode = newTom.makeNode('text');
+                const blockNode = newTom.makeNode('block', {});
+                const textNode = newTom.makeNode('text', {});
                 textNode.text = v.text;
                 blockNode.pushNode(textNode);
 
@@ -416,10 +464,9 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
           const value = [...nodesReplacements.get(tomInstance)!];
 
-          if (tomNode.firstChild === markerEl) {
-            console.log('first marker', markerEl?.innerText);
+          if (startMarker) {
             const textNode = newTom.makeNode('text', {});
-            textNode.text = mutation.target.textContent!;
+            textNode.text = startMarker.innerText;
             if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
               const blockNode = newTom.makeNode('block', {});
               blockNode.pushNode(textNode);
@@ -427,10 +474,11 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
             } else {
               value.unshift(textNode);
             }
-          } else if (tomNode.lastChild === markerEl) {
-            console.log('last marker', markerEl?.innerText);
+          }
+
+          if (endMarker) {
             const textNode = newTom.makeNode('text', {});
-            textNode.text = mutation.target.textContent!;
+            textNode.text = endMarker.innerText;
             if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
               const blockNode = newTom.makeNode('block', {});
               blockNode.pushNode(textNode);
@@ -442,7 +490,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
           console.log('set', value);
           nodesReplacements.set(tomInstance, value);
-        }
+        });
 
         // TODO мб перенести контроль удаления маркеров в сам компонент ноды?
 
@@ -451,6 +499,8 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
           n.insertBefore(...replacements.filter((v) => v));
           n.remove();
         });
+
+        newTom.root.bakeNodes();
       });
     });
 
@@ -463,9 +513,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
     document.addEventListener('selectionchange', () => {
       const selection = document.getSelection();
-      const r = selection?.getRangeAt(0).cloneRange();
-      console.log(selection?.getRangeAt(0).startOffset);
-      setTimeout(() => console.log(r?.startOffset), 1000);
 
       // if (keepSelectionRef.current) {
       //   selection?.removeAllRanges();
