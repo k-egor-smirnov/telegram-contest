@@ -128,7 +128,7 @@ function BlockquoteNode({
   // }
 
   return (
-    <pre {...args} style="display: inline-block;">
+    <pre {...args} style="margin-bottom: 0;">
       <span className="marker">{'>'}</span>
       {node.children.map((child) => (
         <span data-id={child.id} data-type="text">
@@ -170,7 +170,7 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
   switch (node.type) {
     case ApiMessageEntityTypes.Bold: return <BoldNode selected={isSelected} {...args}>{inner}</BoldNode>;
     case ApiMessageEntityTypes.Italic: return <ItalicNode selected={isSelected} {...args}>{inner}</ItalicNode>;
-    case 'block': return <div {...args} id={`md-block-${node.id}`} data-block>{inner.length ? inner : ''}</div>;
+    case 'block': return <div {...args} data-block>{inner.length ? inner : ''}</div>;
     case ApiMessageEntityTypes.Code:
       return (
         <CodeblockNode node={node} selected={isSelected} />
@@ -290,7 +290,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
             }
           } else if (mutation.type === 'childList') {
             if (
-              mutation.previousSibling?.dataset?.type === 'block'
+              mutation.previousSibling?.dataset?.block
             && mutation.previousSibling?.dataset?.id
             && mutation.previousSibling?.dataset?.id === mutation.addedNodes?.[0]?.dataset?.id
             ) {

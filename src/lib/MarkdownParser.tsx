@@ -545,6 +545,12 @@ export class TelegramObjectModel {
           offset: text.length,
           length: blockText.length,
         });
+      } else if (block.type === ApiMessageEntityTypes.Blockquote) {
+        entities.push({
+          type: block.type,
+          offset: text.length,
+          length: blockText.length,
+        });
       }
 
       text += blockText;
@@ -553,6 +559,8 @@ export class TelegramObjectModel {
         text += '\n';
       }
     }
+
+    console.log('apitext', { text, entities });
 
     return {
       text,
