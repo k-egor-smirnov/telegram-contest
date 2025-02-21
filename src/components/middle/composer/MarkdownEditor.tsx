@@ -110,12 +110,31 @@ function CodeblockNode({
   }
 
   return (
-    <pre {...args} data-type={ApiMessageEntityTypes.Code} data-id={node.id}>
+    <pre {...args}>
       <div className="marker">{selected && '```'}js</div>
       {node.children.map((child) => (
         <div data-id={child.id} data-type="text">{child.text}</div>
       ))}
       <div className="marker">{selected && '```'}</div>
+    </pre>
+  );
+}
+
+function BlockquoteNode({
+  selected, children, node, ...args
+}) {
+  // if (!selected) {
+  //   return <Blockquote {...args}>{children}</Blockquote>;
+  // }
+
+  return (
+    <pre {...args} style="display: inline-block;">
+      <span className="marker">{'>'}</span>
+      {node.children.map((child) => (
+        <span data-id={child.id} data-type="text">
+          {child.text ?? <br />}
+        </span>
+      ))}
     </pre>
   );
 }
@@ -158,7 +177,7 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
       );
     case ApiMessageEntityTypes.Blockquote:
       return (
-        <Blockquote {...args} data-block>{inner}</Blockquote>
+        <BlockquoteNode {...args} selected={isSelected} node={node} data-block>{inner}</BlockquoteNode>
       );
     default: return inner ?? '';
   }
@@ -198,6 +217,23 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
       queueMicrotask(() => {
         isUpdateQueued = false;
         forceUpdate();
+
+        // const selection = document.getSelection();
+        // if (
+        //   selection
+        //    && selection.rangeCount
+        //     && selection.isCollapsed
+        //      && selection?.getRangeAt(0)!.startContainer?.dataset?.type === 'root'
+        // ) {
+        //   const firstTextNode = inputRef.current?.querySelector('[data-type="text"]');
+        //   if (firstTextNode) {
+        //     const newRange = new Range();
+        //     newRange.setStart(firstTextNode, 0);
+        //     newRange.setEnd(firstTextNode, 0);
+        //     selection.removeAllRanges();
+        //     selection.addRange(newRange);
+        //   }
+        // }
       });
     }
 
@@ -214,6 +250,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
         const nodesReplacements = new Map<TelegramObjectModelNode<any>, Array<TelegramObjectModelNode<any>>>();
 
+        // TODO разделять текст и маркер, если текст пишется в конце
         const modifiedMarkerNodeMutations = mutations
           .filter((m) => m.type === 'characterData' && m.target.parentElement?.classList.contains('marker'));
 
@@ -456,53 +493,103 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
           const markerNodes = tomNode.querySelectorAll('.marker');
 
-          const startMarker: HTMLElement = markerNodes[0] === tomNode.firstChild ? markerNodes[0] : undefined;
+          let startMarker: HTMLElement | undefined;
+          let endMarker: HTMLElement | undefined;
+
+          startMarker = markerNodes[0] === tomNode.firstChild ? markerNodes[0] : undefined;
           const endMarkerTemp = (markerNodes[1] ?? markerNodes[0]);
-          const endMarker: HTMLElement = endMarkerTemp === startMarker ? undefined : endMarkerTemp;
+          endMarker = endMarkerTemp === startMarker ? undefined : endMarkerTemp;
 
-          if (!nodesReplacements.has(tomInstance)) {
-            if (tomInstance.type === ApiMessageEntityTypes.Code) {
-              nodesReplacements.set(tomInstance, [...tomInstance.children.map((v) => {
-                const blockNode = newTom.makeNode('block', {});
-                const textNode = newTom.makeNode('text', {});
-                textNode.text = v.text;
-                blockNode.pushNode(textNode);
-
-                return blockNode;
-              })]);
-            } else {
-              nodesReplacements.set(tomInstance, [...tomInstance.children]);
-            }
-          }
-
-          const value = [...nodesReplacements.get(tomInstance)!];
+          let needUnwrap = false;
 
           if (startMarker) {
-            const textNode = newTom.makeNode('text', {});
-            textNode.text = startMarker.innerText;
-            if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
-              const blockNode = newTom.makeNode('block', {});
-              blockNode.pushNode(textNode);
-              value.unshift(blockNode);
+            const [beforeContent, afterContent] = startMarker.textContent.split(tomInstance.marker);
+            if (beforeContent !== undefined && afterContent !== undefined) {
+              startMarker.textContent = tomInstance.marker;
+
+              if (beforeContent) {
+                const textNode = newTom.makeNode('text', {});
+                textNode.text = beforeContent;
+                tomInstance.insertBefore(textNode);
+              }
+
+              if (afterContent) {
+                const textNode = newTom.makeNode('text', {});
+                textNode.text = afterContent;
+                tomInstance.unshiftNode(textNode);
+              }
             } else {
-              value.unshift(textNode);
+              needUnwrap = true;
             }
           }
 
           if (endMarker) {
-            const textNode = newTom.makeNode('text', {});
-            textNode.text = endMarker.innerText;
-            if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
-              const blockNode = newTom.makeNode('block', {});
-              blockNode.pushNode(textNode);
-              value.push(blockNode);
+            const [beforeContent, afterContent] = endMarker.textContent.split(tomInstance.marker);
+            if (beforeContent !== undefined && afterContent !== undefined) {
+              endMarker.textContent = tomInstance.marker;
+
+              if (beforeContent) {
+                const textNode = newTom.makeNode('text', {});
+                textNode.text = beforeContent;
+                tomInstance.pushNode(textNode);
+              }
+
+              if (afterContent) {
+                const textNode = newTom.makeNode('text', {});
+                textNode.text = afterContent;
+                tomInstance.insertAfter(textNode);
+              }
             } else {
-              value.push(textNode);
+              needUnwrap = true;
             }
           }
 
-          console.log('set', value);
-          nodesReplacements.set(tomInstance, value);
+          if (needUnwrap) {
+            console.log('unwrap', tomNode);
+            if (!nodesReplacements.has(tomInstance)) {
+              if (tomInstance.type === ApiMessageEntityTypes.Code) {
+                nodesReplacements.set(tomInstance, [...tomInstance.children.map((v) => {
+                  const blockNode = newTom.makeNode('block', {});
+                  const textNode = newTom.makeNode('text', {});
+                  textNode.text = v.text;
+                  blockNode.pushNode(textNode);
+
+                  return blockNode;
+                })]);
+              } else {
+                nodesReplacements.set(tomInstance, [...tomInstance.children]);
+              }
+            }
+
+            const value = [...nodesReplacements.get(tomInstance)!];
+
+            if (startMarker) {
+              const textNode = newTom.makeNode('text', {});
+              textNode.text = startMarker.innerText;
+              if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
+                const blockNode = newTom.makeNode('block', {});
+                blockNode.pushNode(textNode);
+                value.unshift(blockNode);
+              } else {
+                value.unshift(textNode);
+              }
+            }
+
+            if (endMarker) {
+              const textNode = newTom.makeNode('text', {});
+              textNode.text = endMarker.innerText;
+              if (tomNode.nodeName === ApiMessageEntityTypes.Code) {
+                const blockNode = newTom.makeNode('block', {});
+                blockNode.pushNode(textNode);
+                value.push(blockNode);
+              } else {
+                value.push(textNode);
+              }
+            }
+
+            console.log('set', value);
+            nodesReplacements.set(tomInstance, value);
+          }
         });
 
         // TODO мб перенести контроль удаления маркеров в сам компонент ноды?
@@ -531,18 +618,24 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
           const parentNode = nextSelectionRange.current[0];
           // check multiple nodes?
           const textNode = parentNode.childNodes[0];
+          if (textNode.isConnected) {
+            const range = new Range();
+            range.setStart(textNode, nextSelectionRange.current[1]);
+            range.setEnd(textNode, nextSelectionRange.current[2]);
 
-          const range = new Range();
-          range.setStart(textNode, nextSelectionRange.current[1]);
-          range.setEnd(textNode, nextSelectionRange.current[2]);
-
-          selection.removeAllRanges();
-          selection.addRange(range);
-          nextSelectionRange.current = undefined;
+            selection.removeAllRanges();
+            selection.addRange(range);
+            nextSelectionRange.current = undefined;
+          } else {
+            console.log('text node not connected', textNode);
+          }
         }
+
+        return;
       }
 
       const selection = document.getSelection();
+      console.log('selection change', selection);
 
       // if (keepSelectionRef.current) {
       //   selection?.removeAllRanges();
@@ -557,9 +650,22 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
         return;
       }
 
+      const range = selection.getRangeAt(0)!;
+      if (selection.isCollapsed && range.startContainer?.dataset?.type === 'root') {
+        const firstTextNode = inputRef.current?.querySelector('[data-type="text"]');
+        if (firstTextNode) {
+          const newRange = new Range();
+          newRange.setStart(firstTextNode, 0);
+          newRange.setEnd(firstTextNode, 0);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          return;
+        }
+      }
+
       selectedIDsSet.current?.clear();
 
-      getNodesInRange(selection?.getRangeAt(0))
+      getNodesInRange(range)
         .filter((v) => v.dataset?.type)
         .forEach((el: HTMLElement) => {
           selectedIDsSet.current?.add(el.dataset.id);

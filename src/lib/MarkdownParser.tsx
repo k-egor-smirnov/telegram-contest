@@ -221,6 +221,8 @@ export class TelegramObjectModelNode<T extends AnyNode> {
         return '__';
       case ApiMessageEntityTypes.Code:
         return '````';
+      case ApiMessageEntityTypes.Blockquote:
+        return '>';
     }
 
     return ' ';
@@ -306,17 +308,24 @@ export class TelegramObjectModel {
     this.registerNode(this.#root);
   }
 
-  registerNode(node: TelegramObjectModelNode<any>) {
+  registerNode(node: TelegramObjectModelNode<any>, deep = false) {
     this.#nodesById.set(node.id, node);
+
+    if (deep) {
+      node.children.forEach((child) => this.registerNode(child, true));
+    }
   }
 
   unregisterNode(node: TelegramObjectModelNode<any>) {
     this.#nodesById.delete(node.id);
   }
 
-  batchChange(cb: VoidFunction) {
+  batchChange = (cb: VoidFunction) => {
     this.#batchInProgress++;
+    window.cbprogress ??= new Set();
+    window.cbprogress.add(cb);
     cb();
+    window.cbprogress.delete(cb);
     this.#batchInProgress--;
 
     if (this.#batchInProgress > 0) {
@@ -327,7 +336,7 @@ export class TelegramObjectModel {
       this.notifyChange();
       this.#updateScheduled = false;
     }
-  }
+  };
 
   makeNode<T extends AnyNode>(type: T['type'], attrs: Omit<T, 'id' | 'type' | 'children' | 'text'>)
     : TelegramObjectModelNode<T> {
@@ -369,6 +378,7 @@ export class TelegramObjectModel {
         // console.log('try block', str);
         if (str.startsWith('```')) {
           if (blockStack[0].length) {
+            console.log(blockStack);
             const codeBlock = this.makeNode(ApiMessageEntityTypes.Code, {});
             this.batchChange(() => {
               blockStack[0].forEach((v) => {
@@ -377,14 +387,13 @@ export class TelegramObjectModel {
                 console.log('create text', v);
 
                 codeBlock.pushNode(textNode);
+                nodes[0].parent?.insertBefore(codeBlock);
+                nodes.forEach((node) => node.remove());
+                blockStack[1].forEach((node) => node.remove());
+                blockStack[0] = [];
+                blockStack[1] = [];
               });
-              blockStack[1].forEach((node) => node.remove());
-
-              nodes[0].parent?.insertBefore(codeBlock);
             });
-
-            blockStack[0] = [];
-            blockStack[1] = [];
           } else {
             blockStack[0] = [str];
             blockStack[1] = [...nodes];
@@ -401,17 +410,35 @@ export class TelegramObjectModel {
       const parser = new MarkdownParser();
       const tempTOM = parser.parse(str);
 
-      if (tempTOM.root.children[0].children.find((n) => n.type !== 'text')) {
+      const removeCheckedNodes = () => {
+        nodes.forEach((deleteNode) => {
+          const parent = deleteNode.parent;
+          deleteNode.remove();
+
+          if (!parent?.children.length) {
+            parent?.remove();
+          }
+        });
+      };
+
+      if (tempTOM.#root.children.length > 1 || tempTOM.#root.children[0].type !== 'block') {
         this.batchChange(() => {
+          tempTOM.#root.children.forEach((child) => this.registerNode(child, true));
+          nodes[0].parent.insertBefore(...tempTOM.#root.children);
+          removeCheckedNodes();
+        });
+      } else if (tempTOM.root.children[0].children.find((n) => n.type !== 'text')) {
+        this.batchChange(() => {
+          tempTOM.#root.children[0].children.forEach((child) => this.registerNode(child, true));
           nodes[0].insertBefore(...tempTOM.root.children[0].children);
-          nodes.forEach((deleteNode) => deleteNode.remove());
+          removeCheckedNodes();
         });
       }
     };
 
-    this.#root.children.forEach((block) => {
+    [...this.#root.children].forEach((block) => {
       const inlineStack = ['', []];
-      block?.children.forEach((child) => {
+      [...(block?.children ?? [])].forEach((child) => {
         if (child.type === 'text') {
           inlineStack[0] += (child.text);
           inlineStack[1].push(child);
@@ -445,7 +472,7 @@ export class TelegramObjectModel {
     // TODO add real state to DOM node instead of data attrs
 
     switch (node.type) {
-      case 'text': return `<span ${args}>${node.text || ''}</span>`;
+      case 'text': return `<span ${args}>${node.text || '<br />'}</span>`;
       case ApiMessageEntityTypes.Bold: return `<strong ${args}>${innerHTML}</strong>`;
       case ApiMessageEntityTypes.Italic: return `<i ${args}>${innerHTML}</i>`;
       case 'block': return `<div ${args} data-block>${innerHTML}</div>`;

@@ -6,27 +6,21 @@ import React, {
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiFormattedText, ApiInputMessageReplyInfo } from '../../../api/types';
-import type { AnyNode, TelegramObjectModel } from '../../../lib/MarkdownParser';
 import type { ISettings, ThreadId } from '../../../types';
 import type { Signal } from '../../../util/signals';
-import { ApiMessageEntityTypes } from '../../../api/types';
 
-import { EDITABLE_INPUT_ID } from '../../../config';
-import { MarkdownParser } from '../../../lib/MarkdownParser';
 import {
   selectCanPlayAnimatedEmojis,
   selectDraft,
   selectIsInSelectMode,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import { generateRandomInt } from '../../../api/gramjs/gramjsBuilders';
 import renderText from '../../common/helpers/renderText';
 
 import useDerivedState from '../../../hooks/useDerivedState';
 import useLastCallback from '../../../hooks/useLastCallback';
 
 import Icon from '../../common/icons/Icon';
-import Button from '../../ui/Button';
 import TextTimer from '../../ui/TextTimer';
 import MarkdownEditor from './MarkdownEditor';
 
@@ -39,122 +33,6 @@ import styles from './MessageInput.module.scss';
 
 const SCROLLER_CLASS = 'input-scroller';
 // const INPUT_WRAPPER_CLASS = 'message-input-wrapper';
-
-function getNextNode(node) {
-  if (node.firstChild) return node.firstChild;
-  while (node) {
-    if (node.nextSibling) return node.nextSibling;
-    node = node.parentNode;
-  }
-}
-
-const markersByType = {
-  [ApiMessageEntityTypes.Bold]: '**',
-  [ApiMessageEntityTypes.Italic]: '__',
-  block: '',
-  [ApiMessageEntityTypes.Code]: '```',
-  [ApiMessageEntityTypes.Blockquote]: '>',
-};
-
-function getPreviousNode(node) {
-  if (node.previousSibling) return node.previousSibling;
-  while (node) {
-    if (node.previousSibling) return node.previousSibling;
-    node = node.parentNode;
-  }
-}
-
-function getBlockNodes(el: HTMLElement) {
-  const { type } = el.dataset;
-
-  const nodes = [];
-
-  if (type === ApiMessageEntityTypes.Code) {
-    let startNode = el;
-    while (startNode && !startNode.classList.contains('code-block-start')) {
-      startNode = getPreviousNode(startNode);
-    }
-
-    let nextNode = startNode;
-    while (nextNode && nextNode.dataset.type === ApiMessageEntityTypes.Code) {
-      nodes.push(nextNode);
-
-      nextNode = nextNode.nextElementSibling as HTMLElement;
-    }
-  }
-
-  return nodes;
-}
-
-function getNodesInRange(range: Range) {
-  const start = range.startContainer;
-  const end = range.endContainer;
-  const commonAncestor = range.commonAncestorContainer;
-  const nodes = new Set<Node>();
-  let node;
-
-  // walk parent nodes from start to common ancestor
-  for (node = start.parentNode; node; node = node.parentNode) {
-    nodes.add(node);
-    if (node === commonAncestor) break;
-  }
-
-  // walk children and siblings from start until end is found
-  for (node = start; node; node = getNextNode(node)) {
-    nodes.add(node);
-    if (node === end) break;
-  }
-  if (range.endOffset === range.endContainer.textContent?.length) {
-    if (range.endContainer.nextSibling) {
-      nodes.add(range.endContainer.nextSibling);
-    } else if (range.endContainer.parentNode?.nextSibling) {
-      nodes.add(range.endContainer.parentNode.nextSibling);
-    }
-  }
-
-  if (range.startOffset === 0) {
-    if (range.startContainer.previousSibling) {
-      nodes.add(range.startContainer.previousSibling);
-    } else if (range.startContainer.parentNode?.previousSibling) {
-      nodes.add(range.startContainer.parentNode.previousSibling);
-    }
-  }
-
-  if (range.startContainer.nodeType === 1) {
-    const prevSibling = range.startContainer.childNodes[range.startOffset]?.previousSibling;
-    if (prevSibling) {
-      nodes.add(prevSibling);
-    }
-  }
-
-  if (range.endContainer.nodeType === 1) {
-    const nextSibling = range.endContainer.childNodes[range.endOffset]?.nextSibling;
-    if (nextSibling) {
-      nodes.add(nextSibling);
-    }
-  }
-
-  return [...nodes]
-    .map((v) => (v?.nodeType === 3 ? v.parentNode : v))
-    .filter(Boolean);
-}
-
-function getNodesAroundRange(range: Range) {
-  const start = range.startContainer;
-  const end = range.endContainer;
-
-  let startNode = getPreviousNode(start);
-  while (startNode && !startNode?.dataset?.type) {
-    startNode = getPreviousNode(startNode);
-  }
-
-  let endNode = getNextNode(end);
-  while (endNode && !endNode?.dataset?.type) {
-    endNode = getNextNode(endNode);
-  }
-
-  return [startNode, endNode];
-}
 
 type OwnProps = {
   ref?: RefObject<HTMLDivElement>;
