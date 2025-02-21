@@ -1,23 +1,28 @@
 import type { FC } from '../../../../lib/teact/teact';
-import React, { memo, useRef, useState } from '../../../../lib/teact/teact';
+import React, {
+  memo, useLayoutEffect, useRef, useState,
+} from '../../../../lib/teact/teact';
 import { getActions } from '../../../../global';
 
 import type { ApiSticker } from '../../../../api/types';
 import type { IAnchorPosition } from '../../../../types';
 
 import { EDITABLE_INPUT_CSS_SELECTOR, EDITABLE_INPUT_MODAL_CSS_SELECTOR } from '../../../../config';
+import { requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import buildClassName from '../../../../util/buildClassName';
 import { getFolderIconSrcByEmoji } from '../../../../util/folderIconsMap';
 
+import useAppLayout from '../../../../hooks/useAppLayout';
 import useFlag from '../../../../hooks/useFlag';
 import useLastCallback from '../../../../hooks/useLastCallback';
+import useShowTransitionDeprecated from '../../../../hooks/useShowTransitionDeprecated';
 
 import CustomEmojiPicker from '../../../common/CustomEmojiPicker';
 import Icon from '../../../common/icons/Icon';
 import MaskIcon from '../../../common/icons/MaskIcon';
-import SymbolMenu from '../../../middle/composer/SymbolMenu';
 import Button from '../../../ui/Button';
 import Menu from '../../../ui/Menu';
+import { ANIMATION_DURATION } from '../../../ui/Modal';
 import Portal from '../../../ui/Portal';
 import ResponsiveHoverButton from '../../../ui/ResponsiveHoverButton';
 import Spinner from '../../../ui/Spinner';
@@ -25,7 +30,6 @@ import Spinner from '../../../ui/Spinner';
 const MOBILE_KEYBOARD_HIDE_DELAY_MS = 100;
 
 type OwnProps = {
-  isMobile?: boolean;
   isReady?: boolean;
   isSymbolMenuOpen?: boolean;
   isMessageComposer?: boolean;
@@ -37,7 +41,6 @@ type OwnProps = {
   onRemoveSymbol: VoidFunction;
   onEmojiSelect: (emoji: string) => void;
   isSymbolMenuForced?: boolean;
-  isAttachmentModal?: boolean;
   canSendPlainText?: boolean;
   className?: string;
   inputCssSelector?: string;
@@ -45,37 +48,29 @@ type OwnProps = {
 };
 
 const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
-  isMobile,
-  isMessageComposer,
   isReady,
   isSymbolMenuOpen,
-  idPrefix,
   isSymbolMenuForced,
-  className,
-  forceDarkTheme,
-  inputCssSelector = EDITABLE_INPUT_CSS_SELECTOR,
   openSymbolMenu,
   closeSymbolMenu,
   onCustomEmojiSelect,
-  onRemoveSymbol,
-  onEmojiSelect,
   closeSendAsMenu,
   emoticon,
 }) => {
-  const {
-    setStickerSearchQuery,
-    setGifSearchQuery,
-    addRecentEmoji,
-    addRecentCustomEmoji,
-  } = getActions();
+  const { isMobile } = useAppLayout();
+
+  const isOpen = isSymbolMenuOpen || Boolean(isSymbolMenuForced);
+
+  const { shouldRender, transitionClassNames } = useShowTransitionDeprecated(isOpen, closeSymbolMenu, false, false);
 
   // eslint-disable-next-line no-null/no-null
   const triggerRef = useRef<HTMLDivElement>(null);
 
-  const [isSymbolMenuLoaded, onSymbolMenuLoadingComplete] = useFlag();
+  const [isSymbolMenuLoaded] = useFlag();
   const [contextMenuAnchor, setContextMenuAnchor] = useState<IAnchorPosition | undefined>(undefined);
 
   const symbolMenuButtonClassName = buildClassName(
+    'symbol-menu-button',
     'mobile-symbol-menu-button',
     !isReady && 'not-ready',
     isSymbolMenuLoaded
@@ -113,43 +108,75 @@ const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
   const getMenuElement = useLastCallback(() => document.querySelector('#portals .SymbolMenu .bubble'));
   const getLayout = useLastCallback(() => ({ withPortal: true }));
 
-  const isOpen = isSymbolMenuOpen || Boolean(isSymbolMenuForced);
+  const content = (
+    isMobile ? (
+      <Button
+        className={symbolMenuButtonClassName}
+        round
+        color="translucent"
+        onClick={isSymbolMenuOpen ? closeSymbolMenu : handleSymbolMenuOpen}
+        ariaLabel="Choose emoji, sticker or GIF"
+      >
+        <MaskIcon src={getFolderIconSrcByEmoji(emoticon!)} className="symbol-menu-icon" />
+      </Button>
+    ) : (
+      <ResponsiveHoverButton
+        className={buildClassName('symbol-menu-button', isSymbolMenuOpen && 'activated')}
+        round
+        color="translucent"
+        onActivate={handleActivateSymbolMenu}
+        ariaLabel="Choose emoji, sticker or GIF"
+      >
+        <div ref={triggerRef} className="symbol-menu-trigger" />
+        <MaskIcon src={getFolderIconSrcByEmoji(emoticon!)} className="symbol-menu-icon" />
+      </ResponsiveHoverButton>
+    )
+  );
+
+  const picker = (
+    <CustomEmojiPicker
+      idPrefix="folder-icon-emoji-set-"
+      className="SettingsFoldersSymbolMenuButton-modal"
+      loadAndPlay={isOpen}
+      isHidden={!isOpen}
+      isFolderIconPicker
+      isTranslucent
+      onCustomEmojiSelect={onCustomEmojiSelect}
+    />
+  );
+
+  if (isMobile) {
+    if (!shouldRender) {
+      return content;
+    }
+
+    const mobileClassName = buildClassName(
+      'mobile-menu',
+      'SymbolMenu',
+      transitionClassNames,
+    );
+
+    return (
+      <>
+        {content}
+        <Portal>
+          <div className={mobileClassName}>
+            {picker}
+          </div>
+        </Portal>
+      </>
+    );
+  }
 
   return (
     <>
-      {isMobile ? (
-        <Button
-          className={symbolMenuButtonClassName}
-          round
-          color="translucent"
-          onClick={isSymbolMenuOpen ? closeSymbolMenu : handleSymbolMenuOpen}
-          ariaLabel="Choose emoji, sticker or GIF"
-        >
-          <MaskIcon src={getFolderIconSrcByEmoji(emoticon!)} className="symbol-menu-icon" />
-          {isSymbolMenuOpen && !isSymbolMenuLoaded && <Spinner color="gray" />}
-        </Button>
-      ) : (
-        <ResponsiveHoverButton
-          className={buildClassName('symbol-menu-button', isSymbolMenuOpen && 'activated')}
-          round
-          color="translucent"
-          onActivate={handleActivateSymbolMenu}
-          ariaLabel="Choose emoji, sticker or GIF"
-        >
-          <div ref={triggerRef} className="symbol-menu-trigger" />
-          <MaskIcon src={getFolderIconSrcByEmoji(emoticon!)} className="symbol-menu-icon" />
-        </ResponsiveHoverButton>
-      )}
-
+      {content}
       <Portal>
         <Menu
           isOpen={isOpen}
           noCompact
-          positionX="right"
+          positionX="left"
           onClose={closeSymbolMenu}
-          // bubbleClassName={styles.menuContent}
-          // transformOriginX={transformOriginX.current}
-          // noCloseOnBackdrop={isContextMenuShown}
           getRootElement={getRootElement}
           getMenuElement={getMenuElement}
           getTriggerElement={getTriggerElement}
@@ -157,17 +184,7 @@ const SettingsFoldersSymbolMenuButton: FC<OwnProps> = ({
           anchor={contextMenuAnchor}
           withPortal
         >
-          <CustomEmojiPicker
-            idPrefix="folder-icon-emoji-set-"
-            loadAndPlay={isOpen}
-            isHidden={!isOpen}
-            isFolderIconPicker
-            isTranslucent
-            // onContextMenuOpen={markContextMenuShown}
-            // onContextMenuClose={unmarkContextMenuShown}
-            onCustomEmojiSelect={onCustomEmojiSelect}
-            // onContextMenuClick={onClose}
-          />
+          {picker}
         </Menu>
       </Portal>
     </>

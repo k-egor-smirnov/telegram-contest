@@ -170,7 +170,6 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
         length: sticker.emoji!.length,
         offset: 0,
       };
-      console.log(sticker, `${sticker.emoji!} ${state.folder.title.text}`);
 
       let text = state.folder.title.text;
 
@@ -195,6 +194,8 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
         },
       });
     }
+
+    setSymbolPickerOpened(false);
   }, [dispatch]);
 
   const handleSubmit = useCallback(() => {
@@ -351,7 +352,6 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
                 setSymbolPickerOpened(false);
               }}
               emoticon={state.folder.emoticon}
-              isAttachmentModal
               onCustomEmojiSelect={handleEmoticonSet}
               openSymbolMenu={() => {
                 setSymbolPickerOpened(true);
