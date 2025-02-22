@@ -219,6 +219,10 @@ export class TelegramObjectModelNode<T extends AnyNode> {
         return '**';
       case ApiMessageEntityTypes.Italic:
         return '__';
+      case ApiMessageEntityTypes.Strike:
+        return '~~';
+      case ApiMessageEntityTypes.Underline:
+        return '[u]';
       case ApiMessageEntityTypes.Code:
         return '````';
       case ApiMessageEntityTypes.Blockquote:
@@ -475,6 +479,8 @@ export class TelegramObjectModel {
       case 'text': return `<span ${args}>${node.text || '<br />'}</span>`;
       case ApiMessageEntityTypes.Bold: return `<strong ${args}>${innerHTML}</strong>`;
       case ApiMessageEntityTypes.Italic: return `<i ${args}>${innerHTML}</i>`;
+      case ApiMessageEntityTypes.Strike: return `<del ${args}>${innerHTML}</del>`;
+      case ApiMessageEntityTypes.Underline: return `<u ${args}>${innerHTML}</u>`;
       case 'block': return `<div ${args} data-block>${innerHTML}</div>`;
       case ApiMessageEntityTypes.Code:
         return `<pre ${args} data-block class="${buildClassName(node.attrs.isStart && 'code-block-start')}">${innerHTML}</pre>`;
@@ -509,17 +515,11 @@ export class TelegramObjectModel {
         nextNode(child);
       }
 
-      let apiType: ApiMessageEntity['type'];
-      switch (node.type) {
-        case ApiMessageEntityTypes.Bold:
-          apiType = ApiMessageEntityTypes.Bold;
-          break;
-        case ApiMessageEntityTypes.Italic:
-          apiType = ApiMessageEntityTypes.Italic;
-          break;
-        default:
-          apiType = ApiMessageEntityTypes.Unknown;
-      }
+      const apiType: ApiMessageEntity['type'] = node.type;
+      // switch (node.type) {
+      //   default:
+      //     apiType = node.type;
+      // }
 
       const entity: ApiMessageEntity = {
         type: apiType,
@@ -559,8 +559,6 @@ export class TelegramObjectModel {
         text += '\n';
       }
     }
-
-    console.log('apitext', { text, entities });
 
     return {
       text,
@@ -649,6 +647,8 @@ export class MarkdownParser {
 
       this.parseEmphasis(ctx);
       this.parseItalic(ctx);
+      this.parseStrike(ctx);
+      this.parseUnderline(ctx);
 
       if (startPosition === ctx.position) {
         const char = ctx.block[ctx.position];
@@ -723,19 +723,18 @@ export class MarkdownParser {
 
     const { block, position } = ctx;
 
-    const markerChars = marker.split('');
-
-    // todo check previous char
-    const chars = [block[position - 1], block[position], block[position + 1]];
-
-    if (chars[0] !== ' ' && position !== 0) {
+    if (block[position - 1] !== ' ' && position !== 0) {
       return;
     }
 
-    if (chars[1] === markerChars[0] && chars[2] === markerChars[1]) {
-      const last = block.indexOf(marker, position + 2);
+    if (block.slice(position, position + marker.length) === marker) {
+      const last = block.indexOf(marker, position + marker.length);
       if (last === -1) return;
-      const text = block.slice(position + 2, last);
+      const text = block.slice(position + marker.length, last);
+
+      if (!text) {
+        return;
+      }
 
       const childNode = this.#tom.makeNode(astType, {});
 
@@ -756,6 +755,17 @@ export class MarkdownParser {
 
   private parseEmphasis(ctx: InlineContext) {
     this.parseBase(ctx, ApiMessageEntityTypes.Bold, '**');
+  }
+
+  private parseStrike(ctx: InlineContext) {
+    this.parseBase(ctx, ApiMessageEntityTypes.Strike, '~~');
+  }
+
+  /**
+   * Custom marker syntax
+   */
+  private parseUnderline(ctx: InlineContext) {
+    this.parseBase(ctx, ApiMessageEntityTypes.Underline, '[u]');
   }
 
   private parseItalic(ctx: InlineContext) {

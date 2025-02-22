@@ -98,6 +98,36 @@ function ItalicNode({ selected, children, ...args }) {
   );
 }
 
+function StrikeNode({ selected, children, ...args }) {
+  if (selected) {
+    return (
+      <span {...args}>
+        {selected && <span className="marker">~~</span>}
+        {children}
+        {selected && <span className="marker">~~</span>}
+      </span>
+    );
+  }
+
+  return (
+    <del {...args}>
+      {children}
+    </del>
+  );
+}
+
+function UnderlineNode({ selected, children, ...args }) {
+  return (
+    <span {...args}>
+      {selected && <span className="marker">[u]</span>}
+      <u>
+        {children}
+      </u>
+      {selected && <span className="marker">[u]</span>}
+    </span>
+  );
+}
+
 function CodeblockNode({
   selected, children, node, ...args
 }: { node: TelegramObjectModelNode<any> }) {
@@ -170,6 +200,8 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
   switch (node.type) {
     case ApiMessageEntityTypes.Bold: return <BoldNode selected={isSelected} {...args}>{inner}</BoldNode>;
     case ApiMessageEntityTypes.Italic: return <ItalicNode selected={isSelected} {...args}>{inner}</ItalicNode>;
+    case ApiMessageEntityTypes.Strike: return <StrikeNode selected={isSelected} {...args}>{inner}</StrikeNode>;
+    case ApiMessageEntityTypes.Underline: return <UnderlineNode selected={isSelected} {...args}>{inner}</UnderlineNode>;
     case 'block': return <div {...args} data-block>{inner.length ? inner : ''}</div>;
     case ApiMessageEntityTypes.Code:
       return (
@@ -187,16 +219,16 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
   let inputRef = useRef<HTMLElement>();
   const forceUpdate = useForceUpdate();
 
-  const nextSelectionRange = useRef<[HTMLElement, number, number]>();
+  const nextSelectionRange = useRef<[[HTMLElement, number, number], [HTMLElement, number, number, number]]>();
 
   const selectedIDsSet = useRef<Set<string>>();
+  const resetNextSelectionTimer = useRef<number>(0);
 
   inputRef = ref ?? inputRef;
 
   // const prevSelection = useRef < []();
 
   const [tom, setTom] = useState<TelegramObjectModel>();
-  const keepSelectionRef = useRef<Range>();
 
   useEffect(() => {
     selectedIDsSet.current = new Set();
@@ -273,9 +305,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
                 console.log('not a tom node', tomID, parentNode);
                 continue;
               }
-
-              // not working
-              keepSelectionRef.current = document.getSelection()?.getRangeAt(0).cloneRange();
 
               if (!tomID) {
                 console.log('not a tom text', tomNode, mutation);
@@ -615,19 +644,25 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
       if (nextSelectionRange.current) {
         const selection = document.getSelection();
         if (selection) {
-          const parentNode = nextSelectionRange.current[0];
+          let [selector, fallbackSelector] = nextSelectionRange.current;
+          if (!selector[0].isConnected && fallbackSelector[0].isConnected) {
+            selector = [fallbackSelector[0].childNodes[fallbackSelector[1]], fallbackSelector[2], fallbackSelector[3]];
+          }
+
           // check multiple nodes?
-          const textNode = parentNode.childNodes[0];
-          if (textNode.isConnected) {
+          const textNode = selector[0].childNodes[0];
+          if (textNode.isConnected && textNode.nodeType === 3) {
             const range = new Range();
-            range.setStart(textNode, nextSelectionRange.current[1]);
-            range.setEnd(textNode, nextSelectionRange.current[2]);
+            range.setStart(textNode, selector[1]);
+            range.setEnd(textNode, selector[2]);
 
             selection.removeAllRanges();
             selection.addRange(range);
-            nextSelectionRange.current = undefined;
-          } else {
-            console.log('text node not connected', textNode);
+            resetNextSelectionTimer.current = requestAnimationFrame(() => {
+              resetNextSelectionTimer.current = requestAnimationFrame(() => {
+                nextSelectionRange.current = undefined;
+              });
+            });
           }
         }
 
@@ -635,16 +670,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
       }
 
       const selection = document.getSelection();
-      console.log('selection change', selection);
-
-      // if (keepSelectionRef.current) {
-      //   selection?.removeAllRanges();
-      //   selection?.addRange(keepSelectionRef.current);
-      //   console.log('keep', keepSelectionRef.current);
-      //   queueMicrotask(() => {
-      //     keepSelectionRef.current = undefined;
-      //   });
-      // }
 
       if (!selection?.rangeCount) {
         return;
@@ -685,13 +710,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
     });
   }, []);
 
-  // useEffect(() => {
-  //   if (!keepSelection) {
-  //     return;
-  //   }
-  //   setKeepSelection(undefined);
-  // }, [keepSelection]);
-
   useEffect(() => {
     if (tom) {
       onUpdate(tom?.apiText);
@@ -710,8 +728,18 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
     }
 
     const range = selection.getRangeAt(0)!;
+
+    const parent = range.startContainer.parentElement!;
+    const parentParent = parent.parentElement;
+    const parentPosition = parentParent ? [...parentParent.childNodes].indexOf(parent) : -1;
+
+    cancelAnimationFrame(resetNextSelectionTimer.current);
+
     // teact rerenders text as new DOM node
-    nextSelectionRange.current = [range.startContainer.parentElement as HTMLElement, range.startOffset, range.endOffset];
+    nextSelectionRange.current = [
+      [parent as HTMLElement, range.startOffset, range.endOffset],
+      [parentParent as HTMLElement, parentPosition, range.startOffset, range.endOffset],
+    ];
   }
 
   return (
@@ -719,7 +747,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
       <div dangerouslySetInnerHTML={{ __html: tom?.html }} style="position: fixed; top: 0; right: 0; transform: scale(0.5); transform-origin: top right;" />
       <div
         {...restProps}
-        contentEditable
+        contentEditable="plaintext-only"
         ref={(el) => inputRef.current = el}
         data-type={tom?.root.type}
         data-id={tom?.root.id}
