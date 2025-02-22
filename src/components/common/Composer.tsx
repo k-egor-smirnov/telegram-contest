@@ -806,7 +806,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   });
 
   const mainButtonState = useDerivedState(() => {
-    if (!isInputHasFocus && onForward && !(getApiText() && !hasAttachments)) {
+    if (!isInputHasFocus && onForward && !(getApiText().text.replace('\n', '') && !hasAttachments)) {
       return MainButtonState.Forward;
     }
 
@@ -814,7 +814,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       return MainButtonState.Edit;
     }
 
-    if (IS_VOICE_RECORDING_SUPPORTED && !activeVoiceRecording && !isForwarding && !(getApiText() && !hasAttachments)) {
+    if (IS_VOICE_RECORDING_SUPPORTED && !activeVoiceRecording && !isForwarding && !(getApiText().text.replace('\n', '') && !hasAttachments)) {
       return MainButtonState.Record;
     }
 
@@ -1829,6 +1829,8 @@ const Composer: FC<OwnProps & StateProps> = ({
           <MessageInput
             ref={inputRef}
             id={inputId}
+            // TODO add draft state pass
+            key={lastMessageSendTimeSeconds.current}
             editableInputId={editableInputId}
             customEmojiPrefix={type}
             isStoryInput={isInStoryViewer}

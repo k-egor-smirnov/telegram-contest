@@ -464,6 +464,14 @@ export class TelegramObjectModel {
     return () => this.#callbacks.delete(cb);
   }
 
+  static fromAPIText({ text, entities }: ApiFormattedText): TelegramObjectModel {
+    const lines = text.split('\n');
+
+    return lines.map((line) => {
+
+    });
+  }
+
   get root() {
     return this.#root;
   }

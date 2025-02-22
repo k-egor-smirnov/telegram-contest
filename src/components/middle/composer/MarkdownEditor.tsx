@@ -226,7 +226,9 @@ function MDNode({ node, selectedIDsSet }: { node: TelegramObjectModelNode<any>; 
   }
 }
 
-export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
+export default function MarkdownEditor({
+  ref, onUpdate, ...restProps
+}: {}) {
   let inputRef = useRef<HTMLElement>();
   const forceUpdate = useForceUpdate();
 
@@ -726,7 +728,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
   return (
     <>
-      <div dangerouslySetInnerHTML={{ __html: tom?.html }} style="position: fixed; top: 0; right: 0; transform: scale(0.5); transform-origin: top right;" />
+      {/* <div dangerouslySetInnerHTML={{ __html: tom?.html }} style="position: fixed; top: 0; right: 0; transform: scale(0.5); transform-origin: top right;" /> */}
       <div
         {...restProps}
         contentEditable="plaintext-only"
