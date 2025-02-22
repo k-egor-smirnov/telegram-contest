@@ -98,6 +98,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       const {
         chatId, id, message, shouldForceReply, wasDrafted, poll,
       } = update;
+      console.log(2, message);
       global = updateWithLocalMedia(global, chatId, id, message);
       global = updateListedAndViewportIds(global, actions, message as ApiMessage);
 

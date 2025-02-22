@@ -5,10 +5,11 @@ import { getActions, getGlobal } from '../../../global';
 import type { ApiStickerSet } from '../../../api/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
-import { STICKER_SIZE_PICKER_HEADER } from '../../../config';
+import { FOLDER_SYMBOL_SET_ID, STICKER_SIZE_PICKER_HEADER } from '../../../config';
 import { getStickerMediaHash } from '../../../global/helpers';
 import { selectIsAlwaysHighPriorityEmoji } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
+import { getFolderIconSrcByEmoji } from '../../../util/folderIconsMap';
 import { getFirstLetters } from '../../../util/textFormat';
 import { IS_WEBM_SUPPORTED } from '../../../util/windowEnvironment';
 
@@ -59,15 +60,25 @@ const StickerSetCover: FC<OwnProps> = ({
   const isIntersecting = useIsIntersecting(containerRef, observeIntersection);
   const shouldPlay = isIntersecting && !noPlay;
 
+  const isHardcodedSticker = stickerSet.id === FOLDER_SYMBOL_SET_ID;
+
   const hasOnlyStaticThumb = hasStaticThumb && !hasVideoThumb && !hasAnimatedThumb && !thumbCustomEmojiId;
 
   const shouldFallbackToStatic = hasOnlyStaticThumb || (hasVideoThumb && !IS_WEBM_SUPPORTED && !hasAnimatedThumb);
-  const staticHash = shouldFallbackToStatic && getStickerMediaHash(stickerSet.stickers![0], 'preview');
+  const staticHash = (shouldFallbackToStatic && !isHardcodedSticker)
+  && getStickerMediaHash(stickerSet.stickers![0], 'preview');
   const staticMediaData = useMedia(staticHash, !isIntersecting);
 
-  const mediaHash = ((hasThumbnail && !shouldFallbackToStatic) || hasAnimatedThumb) && `stickerSet${stickerSet.id}`;
+  const hardcodedStaticMediaData = isHardcodedSticker
+   && stickerSet.id === FOLDER_SYMBOL_SET_ID
+   && getFolderIconSrcByEmoji(stickerSet.stickers![0].emoji!);
+
+  const mediaHash = ((hasThumbnail && !shouldFallbackToStatic) || hasAnimatedThumb)
+  && !isHardcodedSticker
+  && `stickerSet${stickerSet.id}`;
+
   const mediaData = useMedia(mediaHash, !isIntersecting);
-  const isReady = thumbCustomEmojiId || mediaData || staticMediaData;
+  const isReady = thumbCustomEmojiId || mediaData || staticMediaData || isHardcodedSticker;
   const transitionClassNames = useMediaTransitionDeprecated(isReady);
 
   const coords = useCoordsInSharedCanvas(containerRef, sharedCanvasRef);
@@ -113,7 +124,7 @@ const StickerSetCover: FC<OwnProps> = ({
           />
         ) : (
           <img
-            src={mediaData || staticMediaData}
+            src={hardcodedStaticMediaData || mediaData || staticMediaData}
             style={colorFilter}
             className={buildClassName(styles.image, transitionClassNames)}
             alt=""

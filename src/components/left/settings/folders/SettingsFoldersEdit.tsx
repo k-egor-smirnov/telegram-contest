@@ -4,13 +4,14 @@ import React, {
 } from '../../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../../global';
 
-import type { ApiChatlistExportedInvite } from '../../../../api/types';
+import type { ApiChatlistExportedInvite, ApiMessageEntityCustomEmoji, ApiSticker } from '../../../../api/types';
 import type {
   FolderEditDispatch,
   FoldersState,
 } from '../../../../hooks/reducers/useFoldersReducer';
+import { ApiMessageEntityTypes } from '../../../../api/types';
 
-import { STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
+import { FOLDER_SYMBOL_SET_ID, STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
 import { isUserId } from '../../../../global/helpers';
 import { selectCanShareFolder } from '../../../../global/selectors';
 import { selectCurrentLimit } from '../../../../global/selectors/limits';
@@ -31,6 +32,7 @@ import FloatingActionButton from '../../../ui/FloatingActionButton';
 import InputText from '../../../ui/InputText';
 import ListItem from '../../../ui/ListItem';
 import Spinner from '../../../ui/Spinner';
+import SettingsFoldersSymbolMenuButton from './SettingsFoldersSymbolMenuButton';
 
 type OwnProps = {
   state: FoldersState;
@@ -95,6 +97,8 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
   const [isIncludedChatsListExpanded, setIsIncludedChatsListExpanded] = useState(false);
   const [isExcludedChatsListExpanded, setIsExcludedChatsListExpanded] = useState(false);
 
+  const [isSymbolPickerOpened, setSymbolPickerOpened] = useState(false);
+
   useEffect(() => {
     if (isRemoved) {
       onReset();
@@ -153,7 +157,45 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
 
   const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { currentTarget } = event;
-    dispatch({ type: 'setTitle', payload: currentTarget.value.trim() });
+    dispatch({ type: 'setTitle', payload: { ...state.folder.title, text: currentTarget.value.trim() } });
+  }, [dispatch, state.folder.title]);
+
+  const handleEmoticonSet = useCallback((sticker: ApiSticker) => {
+    if ('id' in sticker.stickerSetInfo && sticker.stickerSetInfo.id === FOLDER_SYMBOL_SET_ID) {
+      dispatch({ type: 'setEmoticon', payload: sticker.emoji! });
+    } else {
+      const entity: ApiMessageEntityCustomEmoji = {
+        type: ApiMessageEntityTypes.CustomEmoji,
+        documentId: sticker.id,
+        length: sticker.emoji!.length,
+        offset: 0,
+      };
+
+      let text = state.folder.title.text;
+
+      const firstEntity = state.folder.title.entities?.[0];
+      if (firstEntity?.type === ApiMessageEntityTypes.CustomEmoji) {
+        text = text.substring(0, firstEntity.offset) + text.substring(firstEntity.offset + firstEntity.length);
+        state.folder.title.entities![0] = entity;
+      } else {
+        state.folder.title.entities!.unshift(entity);
+      }
+
+      text = `${sticker.emoji} ${text}`;
+
+      dispatch({
+        type: 'setTitle',
+        payload: {
+          text,
+          entities: [
+            entity,
+            ...(state.folder.title.entities || []),
+          ],
+        },
+      });
+    }
+
+    setSymbolPickerOpened(false);
   }, [dispatch]);
 
   const handleSubmit = useCallback(() => {
@@ -296,13 +338,51 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
             </p>
           )}
 
-          <InputText
-            className="mb-0"
-            label={lang('FilterNameHint')}
-            value={state.folder.title.text}
-            onChange={handleChange}
-            error={state.error && state.error === ERROR_NO_TITLE ? ERROR_NO_TITLE : undefined}
-          />
+          <div className="title-container">
+            <InputText
+              className="mb-0"
+              label={lang('FilterNameHint')}
+              value={state.folder.title.text}
+              onChange={handleChange}
+              error={state.error && state.error === ERROR_NO_TITLE ? ERROR_NO_TITLE : undefined}
+            />
+
+            <SettingsFoldersSymbolMenuButton
+              closeSymbolMenu={() => {
+                setSymbolPickerOpened(false);
+              }}
+              emoticon={state.folder.emoticon}
+              onCustomEmojiSelect={handleEmoticonSet}
+              openSymbolMenu={() => {
+                setSymbolPickerOpened(true);
+              }}
+              buttonClassName="smaller"
+              isSymbolMenuOpen={isSymbolPickerOpened}
+            />
+          </div>
+
+          {/* // chatId={chatId}
+            // threadId={threadId}
+            // isMobile={isMobile}
+            // isReady={isReady}
+            // isSymbolMenuOpen={isSymbolMenuOpen}
+            openSymbolMenu={openSymbolMenu}
+            // closeSymbolMenu={closeSymbolMenu}
+            // canSendStickers={canSendStickers}
+            // canSendGifs={canSendGifs}
+            // isMessageComposer={isInMessageList}
+            // onGifSelect={handleGifSelect}
+            // onStickerSelect={handleStickerSelect}
+            // onCustomEmojiSelect={handleCustomEmojiSelect}
+            // onRemoveSymbol={removeSymbol}
+            // onEmojiSelect={insertTextAndUpdateCursor}
+            // closeBotCommandMenu={closeBotCommandMenu}
+            // closeSendAsMenu={closeSendAsMenu}
+            // isSymbolMenuForced={isSymbolMenuForced}
+            // canSendPlainText={!isComposerBlocked}
+            // inputCssSelector={editableInputCssSelector}
+            // idPrefix={type}
+            // forceDarkTheme={isInStoryViewer} */}
         </div>
 
         {!isOnlyInvites && (

@@ -8,6 +8,7 @@ import type { ApiChatFolder } from '../../api/types';
 
 import { ALL_FOLDER_ID } from '../../config';
 import buildClassName from '../../util/buildClassName';
+import { getEnabledFolderIcons, pickEnabledFolderIcons } from '../../util/folderIconsMap';
 import { renderTextWithEntities } from '../common/helpers/renderTextWithEntities';
 
 import useOldLang from '../../hooks/useOldLang';

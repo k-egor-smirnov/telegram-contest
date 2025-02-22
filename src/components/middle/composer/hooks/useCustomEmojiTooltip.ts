@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { useEffect } from '../../../../lib/teact/teact';
 import { getActions } from '../../../../global';
 
-import type { ApiSticker } from '../../../../api/types';
+import type { ApiFormattedText, ApiSticker } from '../../../../api/types';
 import type { Signal } from '../../../../util/signals';
 
 import { EMOJI_IMG_REGEX } from '../../../../config';
@@ -25,8 +25,8 @@ const RE_ENDS_ON_EMOJI_IMG = new RegExp(`${EMOJI_IMG_REGEX.source}$`, 'g');
 
 export default function useCustomEmojiTooltip(
   isEnabled: boolean,
-  getHtml: Signal<string>,
-  setHtml: (html: string) => void,
+  getApiText: Signal<ApiFormattedText>,
+  setApiText: (html: string) => void,
   getSelectionRange: Signal<Range | undefined>,
   inputRef: RefObject<HTMLDivElement>,
   customEmojis?: ApiSticker[],
@@ -36,6 +36,7 @@ export default function useCustomEmojiTooltip(
   const [isManuallyClosed, markManuallyClosed, unmarkManuallyClosed] = useFlag(false);
 
   const extractLastEmojiThrottled = useThrottledResolver(() => {
+    return undefined;
     const html = getHtml();
     if (!isEnabled || !html || !getSelectionRange()?.collapsed) return undefined;
 
@@ -45,10 +46,10 @@ export default function useCustomEmojiTooltip(
     const htmlBeforeSelection = getHtmlBeforeSelection(inputRef.current!);
 
     return htmlBeforeSelection.match(IS_EMOJI_SUPPORTED ? RE_ENDS_ON_EMOJI : RE_ENDS_ON_EMOJI_IMG)?.[0];
-  }, [getHtml, getSelectionRange, inputRef, isEnabled], THROTTLE);
+  }, [getApiText, getSelectionRange, inputRef, isEnabled], THROTTLE);
 
   const getLastEmoji = useDerivedSignal(
-    extractLastEmojiThrottled, [extractLastEmojiThrottled, getHtml, getSelectionRange], true,
+    extractLastEmojiThrottled, [extractLastEmojiThrottled, getApiText, getSelectionRange], true,
   );
 
   const isActive = useDerivedState(() => Boolean(getLastEmoji()), [getLastEmoji]);
@@ -85,14 +86,14 @@ export default function useCustomEmojiTooltip(
     const newHtml = htmlBeforeSelection.replace(regex, buildCustomEmojiHtml(emoji).repeat(count));
     const htmlAfterSelection = inputEl.innerHTML.substring(htmlBeforeSelection.length);
 
-    setHtml(`${newHtml}${htmlAfterSelection}`);
+    // setHtml(`${newHtml}${htmlAfterSelection}`);
 
     requestNextMutation(() => {
       focusEditableElement(inputEl, true, true);
     });
   });
 
-  useEffect(unmarkManuallyClosed, [unmarkManuallyClosed, getHtml]);
+  useEffect(unmarkManuallyClosed, [unmarkManuallyClosed, getApiText]);
 
   return {
     isCustomEmojiTooltipOpen: Boolean(isActive && hasCustomEmojis && !isManuallyClosed),

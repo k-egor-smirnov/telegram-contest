@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { useEffect, useState } from '../../../../lib/teact/teact';
 import { getGlobal } from '../../../../global';
 
-import type { ApiChatMember, ApiUser } from '../../../../api/types';
+import type { ApiChatMember, ApiFormattedText, ApiUser } from '../../../../api/types';
 import type { Signal } from '../../../../util/signals';
 import { ApiMessageEntityTypes } from '../../../../api/types';
 
@@ -30,8 +30,8 @@ try {
 
 export default function useMentionTooltip(
   isEnabled: boolean,
-  getHtml: Signal<string>,
-  setHtml: (html: string) => void,
+  getApiText: Signal<ApiFormattedText>,
+  setApiText: (text: ApiFormattedText) => void,
   getSelectionRange: Signal<Range | undefined>,
   inputRef: RefObject<HTMLDivElement>,
   groupChatMembers?: ApiChatMember[],
@@ -42,21 +42,21 @@ export default function useMentionTooltip(
   const [isManuallyClosed, markManuallyClosed, unmarkManuallyClosed] = useFlag(false);
 
   const extractUsernameTagThrottled = useThrottledResolver(() => {
-    const html = getHtml();
-    if (!isEnabled || !getSelectionRange()?.collapsed || !html.includes('@')) return undefined;
+    const { text } = getApiText();
+    if (!isEnabled || !getSelectionRange()?.collapsed || !text.includes('@')) return undefined;
 
     const htmlBeforeSelection = getHtmlBeforeSelection(inputRef.current!);
 
     return prepareForRegExp(htmlBeforeSelection).match(RE_USERNAME_SEARCH)?.[0].trim();
-  }, [isEnabled, getHtml, getSelectionRange, inputRef], THROTTLE);
+  }, [isEnabled, getApiText, getSelectionRange, inputRef], THROTTLE);
 
   const getUsernameTag = useDerivedSignal(
-    extractUsernameTagThrottled, [extractUsernameTagThrottled, getHtml, getSelectionRange], true,
+    extractUsernameTagThrottled, [extractUsernameTagThrottled, getApiText, getSelectionRange], true,
   );
 
   const getWithInlineBots = useDerivedSignal(() => {
-    return isEnabled && getHtml().startsWith('@');
-  }, [getHtml, isEnabled]);
+    return isEnabled && getApiText().text.startsWith('@');
+  }, [getApiText, isEnabled]);
 
   useEffect(() => {
     const usernameTag = getUsernameTag();
@@ -118,7 +118,7 @@ export default function useMentionTooltip(
       const newHtml = `${fixedHtmlBeforeSelection.substr(0, atIndex)}${htmlToInsert}&nbsp;`;
       const htmlAfterSelection = cleanWebkitNewLines(inputEl.innerHTML).substring(fixedHtmlBeforeSelection.length);
       const caretPosition = getCaretPosition(inputEl);
-      setHtml(`${newHtml}${htmlAfterSelection}`);
+      // setHtml(`${newHtml}${htmlAfterSelection}`);
 
       requestNextMutation(() => {
         const newCaretPosition = caretPosition + shiftCaretPosition + 1;
@@ -132,7 +132,7 @@ export default function useMentionTooltip(
     setFilteredUsers(undefined);
   });
 
-  useEffect(unmarkManuallyClosed, [unmarkManuallyClosed, getHtml]);
+  useEffect(unmarkManuallyClosed, [unmarkManuallyClosed, getApiText]);
 
   return {
     isMentionTooltipOpen: Boolean(filteredUsers?.length && !isManuallyClosed),

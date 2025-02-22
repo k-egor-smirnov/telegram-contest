@@ -5,6 +5,7 @@ import React, {
 import { getActions, withGlobal } from '../../../../global';
 
 import type { ApiChatFolder } from '../../../../api/types';
+import type { ISettings } from '../../../../types';
 
 import { ALL_FOLDER_ID, STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
 import { getFolderDescriptionText } from '../../../../global/helpers';
@@ -27,6 +28,7 @@ import Button from '../../../ui/Button';
 import Draggable from '../../../ui/Draggable';
 import ListItem from '../../../ui/ListItem';
 import Loading from '../../../ui/Loading';
+import RadioGroup from '../../../ui/RadioGroup';
 
 type OwnProps = {
   isActive?: boolean;
@@ -41,6 +43,7 @@ type StateProps = {
   recommendedChatFolders?: ApiChatFolder[];
   maxFolders: number;
   isPremium?: boolean;
+  foldersTabsPreference: ISettings['foldersTabsPreference'];
 };
 
 type SortState = {
@@ -62,6 +65,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
   isPremium,
   recommendedChatFolders,
   maxFolders,
+  foldersTabsPreference,
 }) => {
   const {
     loadRecommendedChatFolders,
@@ -69,6 +73,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
     openLimitReachedModal,
     openDeleteChatFolderModal,
     sortChatFolders,
+    setSettingOption,
   } = getActions();
 
   const [state, setState] = useState<SortState>({
@@ -190,6 +195,10 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
       };
     });
   }, [sortChatFolders]);
+
+  const handleSetFoldersTabsPreference = useCallback((position: string) => {
+    setSettingOption({ foldersTabsPreference: position as ISettings['foldersTabsPreference'] });
+  }, [setSettingOption]);
 
   const canCreateNewFolder = useMemo(() => {
     return !isPremium || Object.keys(foldersById).length < maxFolders - 1;
@@ -367,6 +376,22 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
           ))}
         </div>
       )}
+
+      <div className="settings-item pt-3">
+        <h4 className="settings-item-header mb-3" dir={lang.isRtl ? 'rtl' : undefined}>
+          {/* todo */}
+          Tabs view
+        </h4>
+        <RadioGroup
+          options={[
+            { label: 'Tabs on the left', value: 'vertical' },
+            { label: 'Tabs on the top', value: 'horizontal' },
+          ]}
+          selected={foldersTabsPreference}
+          name="tabs-position"
+          onChange={handleSetFoldersTabsPreference}
+        />
+      </div>
     </div>
   );
 };
@@ -385,6 +410,7 @@ export default memo(withGlobal<OwnProps>(
       isPremium: selectIsCurrentUserPremium(global),
       recommendedChatFolders,
       maxFolders: selectCurrentLimit(global, 'dialogFilters'),
+      foldersTabsPreference: global.settings.byKey.foldersTabsPreference,
     };
   },
 )(SettingsFoldersMain));

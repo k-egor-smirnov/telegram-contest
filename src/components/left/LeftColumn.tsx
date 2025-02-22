@@ -7,6 +7,8 @@ import { getActions, withGlobal } from '../../global';
 import type { GlobalState } from '../../global/types';
 import type { FoldersActions } from '../../hooks/reducers/useFoldersReducer';
 import type { ReducerAction } from '../../hooks/useReducer';
+import type { ISettings } from '../../types';
+import type { WithChatFoldersTabsProps } from '../common/hocs/withChatFoldersTabs';
 import { LeftColumnContent, SettingsScreens } from '../../types';
 
 import { selectCurrentChat, selectIsForumPanelOpen, selectTabState } from '../../global/selectors';
@@ -15,17 +17,23 @@ import { captureControlledSwipe } from '../../util/swipeController';
 import {
   IS_APP, IS_FIREFOX, IS_MAC_OS, IS_TOUCH_ENV, LAYERS_ANIMATION_NAME,
 } from '../../util/windowEnvironment';
+import withChatFoldersTabs from '../common/hocs/withChatFoldersTabs';
 
 import useFoldersReducer from '../../hooks/reducers/useFoldersReducer';
+import useAppLayout from '../../hooks/useAppLayout';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import usePrevious from '../../hooks/usePrevious';
+import useShowTransition from '../../hooks/useShowTransition';
 import { useStateRef } from '../../hooks/useStateRef';
 import useSyncEffect from '../../hooks/useSyncEffect';
 
 import Transition from '../ui/Transition';
 import ArchivedChats from './ArchivedChats.async';
+import ChatFoldersVerticalTabs from './ChatFoldersVerticalTabs';
 import LeftMain from './main/LeftMain';
+import MainMenuDropdown from './MainMenuDropdown';
 import NewChat from './newChat/NewChat.async';
 import Settings from './settings/Settings.async';
 
@@ -52,7 +60,7 @@ type StateProps = {
   isClosingSearch?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
   isArchivedStoryRibbonShown?: boolean;
-};
+} & WithChatFoldersTabsProps;
 
 enum ContentType {
   Main,
@@ -86,6 +94,7 @@ function LeftColumn({
   isClosingSearch,
   archiveSettings,
   isArchivedStoryRibbonShown,
+  foldersTabsAppearance,
 }: OwnProps & StateProps) {
   const {
     setGlobalSearchQuery,
@@ -98,6 +107,8 @@ function LeftColumn({
     openChat,
     requestNextSettingsScreen,
   } = getActions();
+
+  const lang = useLang();
 
   const [content, setContent] = useState<LeftColumnContent>(LeftColumnContent.ChatList);
   const [settingsScreen, setSettingsScreen] = useState(SettingsScreens.Main);
@@ -372,6 +383,8 @@ function LeftColumn({
     setGlobalSearchChatId({ id: forumPanelChatId });
   });
 
+  const renderMainMenuButton = () => <MainMenuDropdown onContentChange={setContent} />;
+
   useEffect(
     () => {
       const isArchived = content === LeftColumnContent.Archived;
@@ -437,6 +450,13 @@ function LeftColumn({
       loadPasswordInfo();
     }
   }, [clearTwoFaError, loadPasswordInfo, settingsScreen]);
+
+  useShowTransition({
+    ref,
+    isOpen: foldersTabsAppearance === 'vertical',
+    noCloseTransition: shouldSkipHistoryAnimations,
+    prefix: 'folders-vertical-menu-',
+  });
 
   useSyncEffect(() => {
     if (nextSettingsScreen !== undefined) {
@@ -540,30 +560,58 @@ function LeftColumn({
             isElectronUpdateAvailable={isElectronUpdateAvailable}
             isForumPanelOpen={isForumPanelOpen}
             onTopicSearch={handleTopicSearch}
+            mainMenuButton={renderMainMenuButton()}
           />
         );
     }
   }
 
+  function renderTabs() {
+    if (foldersTabsAppearance !== 'vertical') {
+      return undefined;
+    }
+
+    return (
+      <ChatFoldersVerticalTabs
+        contextRootElementSelector="#LeftColumn"
+        mainMenuButton={renderMainMenuButton()}
+      />
+    );
+  }
+
   return (
-    <Transition
-      ref={ref}
-      name={shouldSkipHistoryAnimations ? 'none' : LAYERS_ANIMATION_NAME}
-      renderCount={RENDER_COUNT}
-      activeKey={contentType}
-      shouldCleanup
-      cleanupExceptionKey={ContentType.Main}
-      shouldWrap
-      wrapExceptionKey={ContentType.Main}
+    <div
       id="LeftColumn"
-      withSwipeControl
+      ref={ref}
     >
-      {renderContent}
-    </Transition>
+      <Transition
+        name={lang.isRtl ? 'slideRtl' : 'slide'}
+        renderCount={2}
+        activeKey={foldersTabsAppearance === 'vertical' ? 0 : 1}
+        className="left-column-tabs"
+        shouldWrap
+        shouldCleanup
+      >
+        {renderTabs}
+      </Transition>
+      <Transition
+        name={shouldSkipHistoryAnimations ? 'none' : LAYERS_ANIMATION_NAME}
+        renderCount={RENDER_COUNT}
+        activeKey={contentType}
+        shouldCleanup
+        cleanupExceptionKey={ContentType.Main}
+        shouldWrap
+        wrapExceptionKey={ContentType.Main}
+        withSwipeControl
+        className="left-column-content"
+      >
+        {renderContent}
+      </Transition>
+    </div>
   );
 }
 
-export default memo(withGlobal<OwnProps>(
+export default memo(withChatFoldersTabs(withGlobal<OwnProps>(
   (global): StateProps => {
     const tabState = selectTabState(global);
     const {
@@ -613,4 +661,4 @@ export default memo(withGlobal<OwnProps>(
       isArchivedStoryRibbonShown: isArchivedRibbonShown,
     };
   },
-)(LeftColumn));
+)(LeftColumn)));

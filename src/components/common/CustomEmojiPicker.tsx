@@ -11,6 +11,7 @@ import type { StickerSetOrReactionsSetOrRecent } from '../../types';
 
 import {
   FAVORITE_SYMBOL_SET_ID,
+  FOLDER_SYMBOL_SET_ID,
   POPULAR_SYMBOL_SET_ID,
   RECENT_SYMBOL_SET_ID,
   SLIDE_TRANSITION_DURATION,
@@ -28,6 +29,7 @@ import {
 } from '../../global/selectors';
 import animateHorizontalScroll from '../../util/animateHorizontalScroll';
 import buildClassName from '../../util/buildClassName';
+import { getEnabledFolderIcons, getFolderIconSrcByEmoji } from '../../util/folderIconsMap';
 import { pickTruthy, unique } from '../../util/iteratees';
 import { IS_TOUCH_ENV } from '../../util/windowEnvironment';
 import { REM } from './helpers/mediaDimensions';
@@ -61,6 +63,7 @@ type OwnProps = {
   withDefaultTopicIcons?: boolean;
   selectedReactionIds?: string[];
   isStatusPicker?: boolean;
+  isFolderIconPicker?: boolean;
   isReactionPicker?: boolean;
   isTranslucent?: boolean;
   onCustomEmojiSelect: (sticker: ApiSticker) => void;
@@ -124,6 +127,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
   canAnimate,
   isReactionPicker,
   isStatusPicker,
+  isFolderIconPicker,
   isTranslucent,
   isSavedMessages,
   isCurrentUserPremium,
@@ -238,12 +242,41 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
           .concat(recentCustomEmojis || []);
         defaultSets.push({
           ...defaultStatusIconsPack,
-          stickers,
+          stickers: [],
           count: stickers.length,
           id: RECENT_SYMBOL_SET_ID,
           title: lang('RecentStickers'),
         });
       }
+    } else if (isFolderIconPicker) {
+      const folderIcons = getEnabledFolderIcons();
+      defaultSets.push({
+        title: lang('FolderIcons'),
+        id: FOLDER_SYMBOL_SET_ID,
+        accessHash: '',
+        isEmoji: true,
+        hasThumbnail: true,
+        hasStaticThumb: true,
+        stickers: folderIcons.map((emoji, i) => {
+          return {
+            emoji,
+            id: `folder-icon-${i}`,
+            width: 56,
+            height: 56,
+            isCustomEmoji: true,
+            stickerSetInfo: {
+              id: FOLDER_SYMBOL_SET_ID,
+              accessHash: '',
+            },
+            thumbnail: {
+              dataUri: getFolderIconSrcByEmoji(emoji),
+              width: 56,
+              height: 56,
+            },
+          };
+        }),
+        count: folderIcons.length,
+      });
     } else if (withDefaultTopicIcons) {
       const defaultTopicIconsPack = stickerSetsById[defaultTopicIconsId!];
       if (defaultTopicIconsPack.stickers?.length) {
@@ -423,7 +456,9 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
       >
         {allSets.map((stickerSet, i) => {
           const shouldHideHeader = stickerSet.id === TOP_SYMBOL_SET_ID
-            || (stickerSet.id === RECENT_SYMBOL_SET_ID && (withDefaultTopicIcons || isStatusPicker));
+            || (stickerSet.id === RECENT_SYMBOL_SET_ID && (withDefaultTopicIcons || isStatusPicker))
+            || (stickerSet.id === FOLDER_SYMBOL_SET_ID && (isFolderIconPicker));
+
           const isChatEmojiSet = stickerSet.id === chatEmojiSetId;
 
           return (

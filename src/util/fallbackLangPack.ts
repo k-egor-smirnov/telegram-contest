@@ -437,6 +437,7 @@ export default {
   EditAdminSendAnonymously: 'Remain Anonymous',
   EditAdminRank: 'Custom title',
   RecentStickers: 'Recently Used',
+  FolderIcons: 'Folder Icons',
   Emoji1: 'Smileys and people',
   Emoji2: 'Animals and nature',
   Emoji3: 'Food and drink',

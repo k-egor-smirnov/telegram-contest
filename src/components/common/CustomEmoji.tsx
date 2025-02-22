@@ -26,6 +26,7 @@ type OwnProps = {
   style?: string;
   size?: number;
   isBig?: boolean;
+  isChatIcon?: boolean;
   noPlay?: boolean;
   noVideoOnMobile?: boolean;
   loopLimit?: number;
@@ -52,6 +53,7 @@ const CustomEmoji: FC<OwnProps> = ({
   style,
   size = STICKER_SIZE,
   isBig,
+  isChatIcon,
   noPlay,
   noVideoOnMobile,
   loopLimit,
@@ -114,6 +116,7 @@ const CustomEmoji: FC<OwnProps> = ({
       ref={containerRef}
       className={buildClassName(
         styles.root,
+        isChatIcon && styles.isChatIcon,
         className,
         'custom-emoji',
         'emoji',

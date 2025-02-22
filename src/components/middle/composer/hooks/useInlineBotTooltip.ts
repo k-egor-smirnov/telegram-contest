@@ -36,7 +36,8 @@ export default function useInlineBotTooltip(
 
   const extractBotQueryThrottled = useThrottledResolver(() => {
     const html = getHtml();
-    return isEnabled && html.startsWith('@') ? parseBotQuery(html) : MEMO_NO_RESULT;
+    return true;
+    // return isEnabled && html.startsWith('@') ? parseBotQuery(html) : MEMO_NO_RESULT;
   }, [getHtml, isEnabled], THROTTLE);
   const {
     username, query, canShowHelp, usernameLowered,

@@ -48,7 +48,7 @@ import StickerSetCover from './StickerSetCover';
 import styles from './StickerPicker.module.scss';
 
 type OwnProps = {
-  chatId: string;
+  chatId?: string;
   threadId?: ThreadId;
   className: string;
   isHidden?: boolean;
@@ -415,9 +415,11 @@ export default memo(withGlobal<OwnProps>(
       effect,
     } = global.stickers;
 
-    const isSavedMessages = selectIsChatWithSelf(global, chatId);
-    const chat = selectChat(global, chatId);
-    const chatStickerSetId = !isUserId(chatId) ? selectChatFullInfo(global, chatId)?.stickerSet?.id : undefined;
+    const isSavedMessages = chatId ? selectIsChatWithSelf(global, chatId) : false;
+    const chat = chatId ? selectChat(global, chatId) : undefined;
+    const chatStickerSetId = (!chatId || !isUserId(chatId))
+      ? selectChatFullInfo(global, chatId)?.stickerSet?.id
+      : undefined;
 
     return {
       chat,

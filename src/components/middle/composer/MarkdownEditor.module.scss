@@ -1,0 +1,5 @@
+.editor {
+  &> :not(:global([data-block])) {
+    background: red;
+  }
+}

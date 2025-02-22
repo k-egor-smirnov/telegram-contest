@@ -80,14 +80,15 @@ const WebPagePreview: FC<OwnProps & StateProps> = ({
   const isSmallerMedia = attachmentSettings.webPageMediaSize === 'small';
 
   const detectLinkDebounced = useDebouncedResolver(() => {
-    const formattedText = parseHtmlAsFormattedText(getHtml());
-    const linkEntity = formattedText.entities?.find((entity): entity is ApiMessageEntityTextUrl => (
-      entity.type === ApiMessageEntityTypes.TextUrl
-    ));
+    // const formattedText = parseHtmlAsFormattedText(getHtml());
+    // const linkEntity = formattedText.entities?.find((entity): entity is ApiMessageEntityTextUrl => (
+    //   entity.type === ApiMessageEntityTypes.TextUrl
+    // ));
 
-    formattedTextWithLinkRef.current = formattedText;
+    // formattedTextWithLinkRef.current = formattedText;
 
-    return linkEntity?.url || formattedText.text.match(RE_LINK)?.[0];
+    // return linkEntity?.url || formattedText.text.match(RE_LINK)?.[0];
+    return '';
   }, [getHtml], DEBOUNCE_MS, true);
 
   const getLink = useDerivedSignal(detectLinkDebounced, [detectLinkDebounced, getHtml], true);

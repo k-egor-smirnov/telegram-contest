@@ -1057,7 +1057,6 @@ addActionHandler('editChatFolder', (global, actions, payload): ActionReturnType 
       id,
       folderUpdate: {
         id,
-        emoticon: folder.emoticon,
         pinnedChatIds: folder.pinnedChatIds,
         ...folderUpdate,
       },

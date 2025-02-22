@@ -211,6 +211,7 @@ export const EMOJI_SIZES = 7;
 export const TOP_SYMBOL_SET_ID = 'top';
 export const POPULAR_SYMBOL_SET_ID = 'popular';
 export const RECENT_SYMBOL_SET_ID = 'recent';
+export const FOLDER_SYMBOL_SET_ID = 'folder';
 export const FAVORITE_SYMBOL_SET_ID = 'favorite';
 export const EFFECT_STICKERS_SET_ID = 'effectStickers';
 export const EFFECT_EMOJIS_SET_ID = 'effectEmojis';
