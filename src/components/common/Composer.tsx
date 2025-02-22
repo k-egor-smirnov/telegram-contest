@@ -738,7 +738,7 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   const resetComposer = useLastCallback((shouldPreserveInput = false) => {
     if (!shouldPreserveInput) {
-      setApiText('');
+      setApiText({ text: '', entities: [] });
     }
 
     setAttachments(MEMO_EMPTY_ARRAY);
@@ -1345,7 +1345,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     if (!isComposerBlocked) return;
 
-    setApiText('');
+    setApiText({ text: '', entities: [] });
   }, [isComposerBlocked, setApiText, attachments]);
 
   const insertTextAndUpdateCursorAttachmentModal = useLastCallback((text: string) => {

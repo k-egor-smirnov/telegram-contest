@@ -12,11 +12,14 @@ import type { TelegramObjectModel, TelegramObjectModelNode } from '../../../lib/
 import { ApiMessageEntityTypes } from '../../../api/types';
 
 import { MarkdownParser } from '../../../lib/MarkdownParser';
+import buildClassName from '../../../util/buildClassName';
 
 import useForceUpdate from '../../../hooks/useForceUpdate';
 
 import Blockquote from '../../common/Blockquote';
 import CodeBlock from '../../common/code/CodeBlock';
+
+import styles from './MarkdownEditor.module.scss';
 
 function getNextNode(node) {
   if (node.firstChild) return node.firstChild;
@@ -24,6 +27,14 @@ function getNextNode(node) {
     if (node.nextSibling) return node.nextSibling;
     node = node.parentNode;
   }
+}
+
+function createBlockWithText(tom: TelegramObjectModel, text = '') {
+  const blockNode = tom.makeNode('block', {});
+  const textNode = tom.makeNode('text', {});
+  textNode.text = text;
+  blockNode.pushNode(textNode);
+  return blockNode;
 }
 
 function getNodesInRange(range: Range) {
@@ -292,6 +303,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
         const deleteNodeIds = new Set<string>();
 
         const stash = new Map<string, TelegramObjectModelNode<any>>();
+        const nextMutationsNodesMap = new Map<Node, TelegramObjectModelNode<any>>();
 
         for (const mutation of mutations) {
           if (mutation.type === 'characterData') {
@@ -300,14 +312,10 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
             if (parentNode?.classList.contains('marker')) {
               continue;
             } else {
-              const tomID = parentNode?.dataset.id;
+              const tomID = nextMutationsNodesMap.get(mutation.target)?.id ?? parentNode?.dataset.id;
               if (!tomID) {
                 console.log('not a tom node', tomID, parentNode);
                 continue;
-              }
-
-              if (!tomID) {
-                console.log('not a tom text', tomNode, mutation);
               }
 
               const tomInstance = newTom.getNodeById(tomID);
@@ -318,72 +326,6 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
               }
             }
           } else if (mutation.type === 'childList') {
-            if (
-              mutation.previousSibling?.dataset?.block
-            && mutation.previousSibling?.dataset?.id
-            && mutation.previousSibling?.dataset?.id === mutation.addedNodes?.[0]?.dataset?.id
-            ) {
-              console.log('ch', mutation);
-              const prevBlockEl = mutation.previousSibling! as HTMLElement;
-              const prevBlockNode = newTom.getNodeById(prevBlockEl.dataset.id)!;
-              if (!prevBlockNode.parent) {
-                console.warn('no parent?', prevBlockNode);
-                continue;
-              }
-
-              // register new line block with id from copy
-              const newBlockEl = mutation.addedNodes[0]! as HTMLElement;
-              const blockNode = newTom.makeNode('block');
-
-              // Придется перерегистрировать все ноды внутри
-              [...newBlockEl.children].forEach((el, i) => {
-                const existNode = newTom.getNodeById(el.dataset.id)!;
-                if (!existNode) {
-                  return;
-                }
-
-                if (i === 0 && el.dataset.type === 'text') {
-                  const prevSpanEl = prevBlockEl.querySelector(`[data-id="${el.dataset.id}"]`) as HTMLElement;
-                  existNode.text = prevSpanEl.innerText;
-
-                  const newNode = newTom.makeNode('text', {});
-                  newNode.text = el.innerText;
-                  blockNode.pushNode(newNode);
-                } else {
-                  blockNode.pushNode(existNode);
-                }
-              });
-
-              newBlockEl.dataset.id = '';
-              newBlockEl.dataset.type = '';
-              newBlockEl.remove();
-
-              prevBlockNode.insertAfter(blockNode);
-              addedNodeIds.add(prevBlockEl.dataset.id);
-              // nextMutationSafe.add(prevBlockNode);
-            }
-
-            // function checkBlock(checkBlockNode: HTMLElement) {
-            //   if (
-            //     checkBlockNode.children.length === 1
-            //         && checkBlockNode.children[0].tagName === 'BR'
-            //   ) {
-            //     const blockInstance = newTom.getNodeById(checkBlockNode.dataset.id);
-            //     if (blockInstance) {
-            //       const textNode = newTom.makeNode('text', {});
-            //       textNode.text = '';
-            //       blockInstance?.pushNode(textNode);
-            //       deleteNodeIds.delete(blockInstance.id);
-            //     }
-            //   } else if (checkBlockNode.children.length === 0) {
-            //     const textNode = newTom.makeNode('text', {});
-            //     textNode.text = '';
-            //     const blockNode = newTom.makeNode('block', {});
-            //     blockNode.pushNode(textNode);
-            //     newTom.root.pushNode(blockNode);
-            //   }
-            // }
-
             for (const rNode of mutation.removedNodes) {
               if (!rNode?.dataset?.id) {
                 continue;
@@ -399,6 +341,47 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
             }
 
             for (const aNode of mutation.addedNodes) {
+              if (aNode.nodeType === 3) {
+                // first symbol input
+                if (aNode.parentElement?.childNodes.length === 1) {
+                  continue;
+                }
+
+                // if (aNode.textContent === '\n') {
+                //   aNode.remove();
+                // }
+
+                // first new line to finish it
+                if (
+                  aNode.textContent === '\n'
+                  && aNode.previousSibling?.textContent !== '\n'
+                  && aNode.nextSibling?.textContent !== '\n'
+                ) {
+                  aNode.remove();
+                  continue;
+                }
+
+                if (!aNode.textContent) {
+                  continue;
+                }
+
+                const parentTomNode = aNode.parentElement;
+                if (parentTomNode?.dataset?.type === 'text') {
+                  const closestBlockNode = parentTomNode.closest('[data-block]');
+                  const blockTomInstance = newTom.getNodeById(closestBlockNode?.dataset?.id);
+
+                  if (blockTomInstance) {
+                    const blockNode = createBlockWithText(newTom, aNode.textContent.replace('\n', ''));
+                    blockTomInstance.insertAfter(blockNode);
+                    nextMutationsNodesMap.set(aNode, blockNode.children[0]);
+                    aNode.remove();
+                    continue;
+                  }
+                }
+
+                continue;
+              }
+
               if (mutation.removedNodes[0] && aNode === mutation.removedNodes[0]) {
                 continue;
               }
@@ -422,7 +405,10 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
                 addedNodeIds.add(tomInstance.id);
               }
 
-              const domParentId = aNode.parentElement?.dataset.id;
+              const domParent = aNode.parentElement;
+              if (domParent?.dataset?.type === 'root') {
+                continue;
+              }
 
               // У TOM нод еще старый parent, надо это учитывать
               const mutationTargetNode = newTom.getNodeById(mutation.target?.dataset?.id);
@@ -473,11 +459,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
           // console.log('remove', n.type, n);
 
           if (n && (n.parent!.type === 'root') && n.parent?.children.length === 1) {
-            const blockNode = newTom.makeNode('block', {});
-            const textNode = newTom.makeNode('text', {});
-            textNode.text = '';
-            blockNode.pushNode(textNode);
-            n.insertBefore(blockNode);
+            n.insertBefore(createBlockWithText(newTom, ''));
 
             mutations.forEach((mutation) => {
               for (const node of mutation.addedNodes) {
@@ -651,7 +633,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
 
           // check multiple nodes?
           const textNode = selector[0].childNodes[0];
-          if (textNode.isConnected && textNode.nodeType === 3) {
+          if (textNode.isConnected && textNode.nodeType === 3 && textNode.textContent?.length >= selector[2]) {
             const range = new Range();
             range.setStart(textNode, selector[1]);
             range.setEnd(textNode, selector[2]);
@@ -753,6 +735,7 @@ export default function MarkdownEditor({ ref, onUpdate, ...restProps }: {}) {
         data-id={tom?.root.id}
         // onBeforeInput={(e) => console.log('before input', e)}
         onInput={handleInput}
+        className={buildClassName(restProps.className, styles.editor)}
       >
         {tom?.root.children.map((node) => {
           return <MDNode key={node.id} node={node} selectedIDsSet={selectedIDsSet} />;
